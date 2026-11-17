@@ -9,7 +9,8 @@
   "scripts": {
     "start": "electron .",
     "dev": "electron main.js",
-    "test": "node test/theme.test.js && node test/updater.test.js && node test/sidebar-data.test.js",
+    "test": "node test/theme.test.js && node test/updater.test.js && node test/sidebar-data.test.js && node test/manifest-check.test.js",
+    "check:manifest": "node scripts/release.js --check",
     "release": "node scripts/release.js",
     "dist:mac": "electron-builder --mac",
     "dist:win": "electron-builder --win",

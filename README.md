@@ -71,6 +71,8 @@ You install the app once. After that it updates itself from [github.com/Dylz101/
 
 To publish an update: make the change, run `npm test`, run `npm run release` (bumps the version and rewrites `manifest.json`), then commit and push to `main`. `npm run dev` starts the app from this folder without the updater.
 
+Every change to `main.js`, `preload.js`, `theme.js`, `sidebar-data.js`, `shell/` or `fonts/` needs a release in the same commit. The app refuses an update if any file fails its checksum, so a change merged without one stops every installed app from updating until someone releases. `npm run check:manifest` reports which files are out of date. GitHub runs it, with the tests, on every pull request and every push to `main` (`.github/workflows/check.yml`); to make a failing check block merging, turn on branch protection for `main` and require the `manifest` check.
+
 ## Fonts
 
 Foun and CS Genio Mono are paid fonts, so they aren't included. Until you add them, Antonio and Space Mono (both under the SIL Open Font License, in `fonts/`) stand in.

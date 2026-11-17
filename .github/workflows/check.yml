@@ -1,0 +1,23 @@
+# Fails a push or pull request when manifest.json doesn't match the app's
+# files. Running apps refuse an update if any file fails its checksum, so a
+# change that skips `npm run release` would stop every app from updating.
+name: check
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  manifest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # Plain Node only: nothing here needs `npm install`.
+      - name: manifest.json matches the files
+        run: node scripts/release.js --check
+      - name: tests
+        run: npm test
