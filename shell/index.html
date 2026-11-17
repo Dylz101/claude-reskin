@@ -39,7 +39,7 @@
 
   <div id="workspace">
 
-    <nav id="sidebar" aria-label="Chats">
+    <nav id="sidebar" aria-label="Chats and sessions">
       <button type="button" class="primary-btn" id="btn-new">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
         <span>new chat</span>
@@ -60,10 +60,12 @@
         <div id="list-starred"></div>
       </div>
       <div class="chat-group grow">
-        <span class="side-label">recents</span>
+        <span class="side-label" id="recents-label">recents</span>
         <div id="list-recents"></div>
+        <button type="button" class="small-btn more-btn" id="btn-more" hidden>load more</button>
         <p class="side-note" id="chats-note" hidden></p>
         <div class="side-actions" id="chats-actions" hidden>
+          <button type="button" class="small-btn" id="btn-open-code" hidden>open code</button>
           <button type="button" class="small-btn" id="btn-retry">try again</button>
           <button type="button" class="small-btn" id="btn-native-sidebar">show claude's sidebar</button>
         </div>

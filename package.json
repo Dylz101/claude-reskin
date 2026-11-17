@@ -9,7 +9,7 @@
   "scripts": {
     "start": "electron .",
     "dev": "electron main.js",
-    "test": "node test/theme.test.js && node test/updater.test.js",
+    "test": "node test/theme.test.js && node test/updater.test.js && node test/sidebar-data.test.js",
     "release": "node scripts/release.js",
     "dist:mac": "electron-builder --mac",
     "dist:win": "electron-builder --win",
@@ -28,6 +28,7 @@
       "main.js",
       "preload.js",
       "theme.js",
+      "sidebar-data.js",
       "shell/**",
       "fonts/**"
     ],

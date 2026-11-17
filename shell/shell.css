@@ -108,6 +108,9 @@ body.platform-darwin #topbar { padding-left: 84px; }
 .chat-split { width: 30px; height: 30px; color: var(--side-mute); opacity: 0; }
 .chat-row:hover .chat-split, .chat-split:focus-visible { opacity: 1; }
 .chat-split svg { width: 15px; height: 15px; }
+.chat-row.is-live .badge { color: var(--accent-side-ink); }
+.more-btn { align-self: flex-start; margin: 6px 6px 0; }
+.nav-row.is-current { background: rgba(128,128,128,.18); }
 .side-note { margin: 6px 6px 0; font-size: 12px; color: var(--side-mute); }
 .side-actions { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 6px 0; }
 .side-footer { padding-top: 10px; border-top: 1px solid var(--line); }

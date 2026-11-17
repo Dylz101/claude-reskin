@@ -14,7 +14,7 @@ const crypto = require('node:crypto');
 
 const ROOT = path.join(__dirname, '..');
 const MIN_LOADER = 1;
-const PAYLOAD = ['main.js', 'preload.js', 'theme.js', 'shell', 'fonts'];
+const PAYLOAD = ['main.js', 'preload.js', 'theme.js', 'sidebar-data.js', 'shell', 'fonts'];
 
 function walk(rel) {
   const abs = path.join(ROOT, rel);
