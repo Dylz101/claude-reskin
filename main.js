@@ -525,6 +525,10 @@ function buildMenu() {
               .catch((err) => clipboard.writeText('layout report failed: ' + err));
           })
         },
+        {
+          label: 'Copy sidebar report',
+          click: () => clipboard.writeText(sidebarData ? sidebarData.report() : 'sidebar not ready')
+        },
         { type: 'separator' },
         { role: 'togglefullscreen' }
       ]

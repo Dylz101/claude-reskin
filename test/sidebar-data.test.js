@@ -208,6 +208,52 @@ test('drops a learned request that returns something other than sessions', async
   assert.equal(store.endpoint, null);
 });
 
+const orgsReply = { status: 200, body: [{ uuid: ORG_TEAM, capabilities: ['chat'] }] };
+const sessionsOnly = (reply) => async (reqs) => reqs.map((q) => (q.url === '/api/organizations' ? orgsReply : reply(q)));
+const seenCode = { method: 'GET', url: 'https://claude.ai/v1/code/sessions', pagePath: '/code', headers: { 'anthropic-beta': 'x' } };
+
+test('a 200 reply with no list in it is not "no sessions"', async () => {
+  const store = new S.SidebarData({ request: sessionsOnly(() => ({ status: 200, body: { type: 'ok' } })), getCookieOrg: async () => ORG_TEAM });
+  store.observeRequest(seenCode);
+  assert.equal((await store.sessions()).error, 'open-code');
+  assert.equal(store.endpoint, null, 'must not remember an endpoint that never returned a list');
+});
+
+test('an empty list from a guess is not trusted, from claude.ai\'s own request it is', async () => {
+  const empty = sessionsOnly(() => ({ status: 200, body: { data: [], has_more: false } }));
+  const guessing = new S.SidebarData({ request: empty, getCookieOrg: async () => ORG_TEAM });
+  assert.equal((await guessing.sessions()).error, 'open-code');
+  const learned = new S.SidebarData({ request: empty, getCookieOrg: async () => ORG_TEAM });
+  learned.observeRequest(seenCode);
+  assert.deepEqual(await learned.sessions(), { items: [] });
+});
+
+test('reads the real status values and drops archived sessions', async () => {
+  const body = { data: [
+    { id: 'session_01Aaaa', title: 'a', session_status: 'SESSION_STATUS_RUNNING', updated_at: iso(1) },
+    { id: 'session_01Bbbb', title: 'b', session_status: 'SESSION_STATUS_IDLE', updated_at: iso(2) },
+    { id: 'session_01Cccc', title: 'c', session_status: 'SESSION_STATUS_ARCHIVED', updated_at: iso(3) }
+  ] };
+  const store = new S.SidebarData({ request: sessionsOnly(() => ({ status: 200, body })), getCookieOrg: async () => ORG_TEAM });
+  store.observeRequest(seenCode);
+  const r = await store.sessions();
+  assert.deepEqual(r.items.map((x) => [x.id, x.status]), [['session_01Aaaa', 'running'], ['session_01Bbbb', 'idle']]);
+});
+
+test('the sidebar report holds no titles, ids, tokens or organization ids', async () => {
+  const body = { data: [{ id: 'session_01SecretId', title: 'private plans', session_status: 'SESSION_STATUS_IDLE', updated_at: iso(1) }] };
+  const store = new S.SidebarData({ request: sessionsOnly(() => ({ status: 200, body })), getCookieOrg: async () => ORG_TEAM });
+  store.observeRequest(Object.assign({}, seenCode, { url: 'https://claude.ai/v1/code/sessions?org=' + ORG_TEAM + '&limit=20',
+    headers: { 'anthropic-beta': 'x', Authorization: 'Bearer TOKEN123', Cookie: 'c=1' } }));
+  await store.sessions();
+  const text = store.report();
+  for (const secret of ['private plans', 'SecretId', 'TOKEN123', ORG_TEAM, 'c=1']) assert.ok(!text.includes(secret), 'leaked ' + secret);
+  const rep = JSON.parse(text);
+  assert.equal(rep.code.attempts[0].rawCount, 1);
+  assert.equal(rep.code.attempts[0].listKey, 'data');
+  assert.deepEqual(rep.code.attempts[0].firstItemKeys, ['id', 'title', 'session_status', 'updated_at']);
+});
+
 test('mutationKind spots chat and session changes, never reads', () => {
   assert.equal(S.mutationKind('POST', 'https://claude.ai/api/organizations/o/chat_conversations/abc/completion'), 'chats');
   assert.equal(S.mutationKind('PUT', 'https://claude.ai/api/organizations/o/chat_conversations/abc'), 'chats');

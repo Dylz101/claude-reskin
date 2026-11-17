@@ -43,13 +43,15 @@ async function pageFetch(reqs) {
 // ---------------------------------------------------------------------------
 // Pure helpers
 // ---------------------------------------------------------------------------
+const LIST_KEYS = ['data', 'conversations', 'sessions', 'items', 'results'];
+const listKey = (body) => {
+  if (Array.isArray(body)) return '[]';
+  if (!body || typeof body !== 'object') return null;
+  return LIST_KEYS.find((k) => Array.isArray(body[k])) || null;
+};
 const listOf = (body) => {
-  if (Array.isArray(body)) return body;
-  if (!body || typeof body !== 'object') return [];
-  for (const k of ['data', 'conversations', 'sessions', 'items', 'results']) {
-    if (Array.isArray(body[k])) return body[k];
-  }
-  return [];
+  const k = listKey(body);
+  return k === null ? [] : k === '[]' ? body : body[k];
 };
 
 // The organization claude.ai is using: the one its own requests name, then
@@ -96,7 +98,7 @@ function normalizeSession(s) {
   if (!s || typeof s !== 'object') return null;
   const id = s.id || s.session_id;
   if (typeof id !== 'string' || !SESSION_ID.test(id)) return null;
-  const status = String(s.session_status || s.status || '').toLowerCase();
+  const status = String(s.session_status || s.status || '').toLowerCase().replace(/^session_status_/, '');
   if (status === 'archived' || s.archived === true || s.is_archived === true) return null;
   return {
     id,
@@ -180,6 +182,42 @@ class SidebarData {
     this.onOrgChange = null;    // set by the caller: claude.ai switched organization
     this.onCandidate = null;    // set by the caller: a new session-list request was seen
     this.queue = { chats: Promise.resolve(), code: Promise.resolve() };
+    this.diag = { code: [], chats: null };
+  }
+
+  // What the last session-list attempts looked like, without titles, ids or
+  // credentials, for the "Copy sidebar report" menu item.
+  note(kind, t, r, raw, kept) {
+    if (kind !== 'code') return;
+    const first = raw.find((x) => x && typeof x === 'object');
+    this.diag.code.push({
+      source: t.learned ? 'learned from claude.ai' : t.guess ? 'guess' : 'saved',
+      path: maskPath(t.ep.url),
+      headers: Object.keys(t.ep.headers || {}).sort(),
+      needsAuth: !!t.ep.needsAuth,
+      status: r.status,
+      bodyType: r.body === null ? 'null' : Array.isArray(r.body) ? 'array' : typeof r.body,
+      topKeys: r.body && typeof r.body === 'object' && !Array.isArray(r.body) ? Object.keys(r.body).slice(0, 12) : [],
+      listKey: listKey(r.body),
+      rawCount: raw.length,
+      keptCount: kept.length,
+      firstItemKeys: first ? Object.keys(first).slice(0, 20) : [],
+      firstIdShape: first && typeof (first.id || first.session_id) === 'string' ? maskId(first.id || first.session_id) : null,
+      statuses: [...new Set(raw.map((x) => x && (x.session_status || x.status)).filter(Boolean))].slice(0, 8)
+    });
+    this.diag.code = this.diag.code.slice(-6);
+  }
+
+  report() {
+    const c = this.chatState;
+    return JSON.stringify({
+      chats: { api: this.chatApi, recents: c.recents.length, starred: c.starred.length, hasMore: c.hasMore, orgKnown: !!c.org },
+      code: {
+        savedEndpoint: this.endpoint ? { path: maskPath(this.endpoint.url), headers: Object.keys(this.endpoint.headers || {}).sort(), needsAuth: !!this.endpoint.needsAuth } : null,
+        waitingCandidate: this.candidate ? maskPath(this.candidate.url) : null,
+        attempts: this.diag.code
+      }
+    }, null, 2);
   }
 
   // Watches claude.ai's own requests (from webRequest.onSendHeaders).
@@ -353,9 +391,11 @@ class SidebarData {
           if (r.status < 200 || r.status >= 300) continue;
           const raw = listOf(r.body);
           const items = raw.map(normalizeSession).filter(Boolean);
-          // An empty list proves nothing about the endpoint unless it answered
-          // with a list; anything without session ids is some other endpoint.
-          const looksRight = items.length > 0 || (raw.length === 0 && r.body && typeof r.body === 'object');
+          this.note('code', t, r, raw, items);
+          // Anything without session ids is some other endpoint. An empty list
+          // only counts when the answer really was a list, and not when the
+          // app was guessing: an empty reply from a guess proves nothing.
+          const looksRight = items.length > 0 || (raw.length === 0 && listKey(r.body) !== null && !t.guess);
           if (!looksRight) continue;
           if (t.learned) {
             this.candidate = null;
@@ -377,6 +417,16 @@ class SidebarData {
     });
   }
 }
+
+// Replaces ids in a URL so a report can be shared without them.
+function maskPath(url) {
+  try {
+    const u = new URL(url, CLAUDE);
+    return u.origin + u.pathname.replace(/[0-9a-f]{8}-[0-9a-f-]{27}/gi, '<uuid>').replace(/session_\w+/g, 'session_<id>') +
+      (u.search ? '?' + [...u.searchParams.keys()].join('&') : '');
+  } catch { return '(unparseable)'; }
+}
+const maskId = (id) => String(id).replace(/[A-Za-z0-9]/g, (ch, i) => (i < 8 ? ch : 'x'));
 
 function errText(err) {
   return String(err && err.message ? err.message : err || 'unknown error');
