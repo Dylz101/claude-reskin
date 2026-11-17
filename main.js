@@ -20,6 +20,7 @@ const { pathToFileURL } = require('node:url');
 // an update is swapped in while the app runs (see hotSwap below).
 let APP_DIR = __dirname;
 let Theme = require('./theme.js');
+const Sidebar = require('./sidebar-data.js');
 const updater = global.reskinUpdater || null; // set by bootstrap.js
 let update = { state: updater ? 'current' : 'off', version: updater ? updater.version : 'dev' };
 
@@ -44,10 +45,11 @@ function loadSettings() {
   try { settings = JSON.parse(fs.readFileSync(userFile('settings.json'), 'utf8')) || {}; }
   catch { settings = {}; }
   settings.theme = Theme.withDefaults(Theme.sanitize(settings.theme));
-  settings.ui =Object.assign({ sidebar: true, appearance: false }, settings.ui);
+  settings.ui = Object.assign({ sidebar: true, appearance: false }, settings.ui);
   settings.panes = Array.isArray(settings.panes) && settings.panes.length ? settings.panes.slice(0, MAX_PANES) : [CLAUDE + '/new'];
   settings.focus = Number.isInteger(settings.focus) ? settings.focus : 0;
   settings.fonts = Array.isArray(settings.fonts) ? settings.fonts : [];
+  settings.codeEndpoint = settings.codeEndpoint && typeof settings.codeEndpoint.url === 'string' ? settings.codeEndpoint : null;
 }
 
 function saveSoon() {
@@ -269,8 +271,12 @@ function wirePane(pane) {
   const wc = pane.view.webContents;
 
   wc.on('dom-ready', () => { pane.cssKey = null; applyTheme(pane); });
-  wc.on('page-title-updated', (_e, title) => { pane.title = cleanTitle(title); pushState(); });
-  const onNav = (_e, url) => { pane.url = url; saveSoon(); pushState(); notifyChatsChanged(); };
+  // claude.ai retitles the page when a chat is named or renamed.
+  wc.on('page-title-updated', (_e, title) => { pane.title = cleanTitle(title); pushState(); notifyChatsChanged(); });
+  const onNav = (_e, url) => {
+    pane.url = url; saveSoon(); pushState(); notifyChatsChanged();
+    if (/^https:\/\/claude\.ai\/code(\/|$|\?)/.test(url)) notifyCodeChanged();
+  };
   wc.on('did-navigate', onNav);
   wc.on('did-navigate-in-page', onNav);
   wc.on('did-start-loading', pushState);
@@ -389,52 +395,38 @@ function pushState() {
   });
 }
 
-let chatsTimer = null;
-function notifyChatsChanged() {
-  clearTimeout(chatsTimer);
-  chatsTimer = setTimeout(() => {
-    if (shellView && !shellView.webContents.isDestroyed()) shellView.webContents.send('chats-changed');
-  }, 1500);
-}
+// ---------------------------------------------------------------------------
+// Sidebar data: chats and Claude Code sessions (see sidebar-data.js)
+// ---------------------------------------------------------------------------
+let sidebarData = null;
 
-// Runs inside a claude.ai page, with the user's own session, to list chats
-// for the app's sidebar. These are the same requests claude.ai's sidebar makes.
-async function chatFetcher() {
-  const get = async (u) => {
-    const r = await fetch(u, { credentials: 'include', headers: { accept: 'application/json' } });
-    if (r.status === 401 || r.status === 403) throw new Error('signed-out');
-    if (!r.ok) throw new Error('http ' + r.status);
-    return r.json();
-  };
-  try {
-    const orgs = await get('/api/organizations');
-    if (!Array.isArray(orgs) || !orgs.length) return { error: 'signed-out' };
-    const org = orgs.find((o) => Array.isArray(o.capabilities) && o.capabilities.includes('chat')) || orgs[0];
-    const raw = await get('/api/organizations/' + org.uuid + '/chat_conversations?limit=60');
-    const list = Array.isArray(raw) ? raw : (raw && raw.data) || [];
-    const items = list.map((c) => ({
-      id: c.uuid,
-      title: c.name || 'untitled chat',
-      updated: c.updated_at || c.created_at || '',
-      starred: !!c.is_starred,
-      project: c.project && c.project.name ? c.project.name : ''
-    }));
-    items.sort((a, b) => (a.updated < b.updated ? 1 : -1));
-    return { items };
-  } catch (err) {
-    return { error: String(err && err.message ? err.message : err) };
-  }
+function notifyShell(channel) {
+  if (shellView && !shellView.webContents.isDestroyed()) shellView.webContents.send(channel);
 }
+const debounced = (fn, ms) => { let t = null; return () => { clearTimeout(t); t = setTimeout(fn, ms); }; };
+const notifyChatsChanged = debounced(() => notifyShell('chats-changed'), 700);
+const notifyCodeChanged = debounced(() => notifyShell('code-changed'), 700);
 
-async function listChats() {
+// Runs Sidebar.pageFetch inside a signed-in claude.ai pane.
+async function paneRequest(reqs) {
   const candidates = panes.filter((p) => !p.view.webContents.isDestroyed() && isClaudeUrl(p.view.webContents.getURL()));
   const p = candidates.find((c) => !c.view.webContents.isLoading()) || candidates[0];
-  if (!p) return { error: 'no-pane' };
-  try {
-    return await p.view.webContents.executeJavaScript('(' + chatFetcher.toString() + ')()', true);
-  } catch (err) {
-    return { error: String(err && err.message ? err.message : err) };
-  }
+  if (!p) throw new Error('no-pane');
+  return p.view.webContents.executeJavaScript('(' + Sidebar.pageFetch.toString() + ')(' + JSON.stringify(reqs) + ')', true);
+}
+
+function createSidebarData() {
+  sidebarData = new Sidebar.SidebarData({
+    request: paneRequest,
+    getCookieOrg: async () => {
+      const [c] = await session.defaultSession.cookies.get({ url: CLAUDE, name: 'lastActiveOrg' });
+      return c ? decodeURIComponent(c.value) : null;
+    },
+    savedEndpoint: settings.codeEndpoint,
+    onEndpoint: (ep) => { settings.codeEndpoint = ep; saveSoon(); }
+  });
+  sidebarData.onOrgChange = () => { notifyChatsChanged(); notifyCodeChanged(); };
+  sidebarData.onCandidate = notifyCodeChanged;
 }
 
 function openExternal(url) {
@@ -567,6 +559,10 @@ function registerIpc() {
     if (typeof id !== 'string' || !/^[0-9a-f-]{8,}$/i.test(id)) return;
     openChat(CLAUDE + '/chat/' + id, split ? 'split' : 'replace');
   });
+  ipcMain.on('session:open', (_e, { id, split }) => {
+    if (typeof id !== 'string' || !/^session_[A-Za-z0-9]+$/.test(id)) return;
+    openChat(CLAUDE + '/code/' + id, split ? 'split' : 'replace');
+  });
   ipcMain.on('nav:go', (_e, where) => { if (NAV_PATHS[where]) openChat(CLAUDE + NAV_PATHS[where], 'replace'); });
   ipcMain.on('ui:set', (_e, patch) => setUi({
     ...(typeof patch.sidebar === 'boolean' ? { sidebar: patch.sidebar } : {}),
@@ -583,7 +579,8 @@ function registerIpc() {
   ipcMain.on('update:check', () => { if (updater) updater.check(true); });
   ipcMain.on('update:restart', () => { if (update.state === 'restart') restartToUpdate(); });
 
-  ipcMain.handle('chats:list', listChats);
+  ipcMain.handle('chats:list', (_e, opts) => sidebarData.chats({ more: !!(opts && opts.more) }));
+  ipcMain.handle('code:list', () => sidebarData.sessions());
   ipcMain.handle('fonts:list', () => fontListForShell());
   ipcMain.handle('fonts:add', async () => {
     const res = await dialog.showOpenDialog(win, {
@@ -639,6 +636,25 @@ function setupSession() {
     callback({ responseHeaders: headers });
   });
 
+  // Watch claude.ai's own requests: which organization it is using, the
+  // request its Code page makes for the session list, and any change to chats
+  // or sessions, so the app's sidebar refreshes when claude.ai's would.
+  const WATCH = { urls: ['https://claude.ai/*', 'https://*.claude.ai/*', 'https://api.anthropic.com/*'] };
+  ses.webRequest.onSendHeaders(WATCH, (d) => {
+    if (!sidebarData) return;
+    let pagePath = null;
+    try {
+      const wc = d.webContents;
+      if (wc && !wc.isDestroyed() && panes.some((p) => p.view.webContents === wc)) pagePath = new URL(wc.getURL()).pathname;
+    } catch { pagePath = null; }
+    sidebarData.observeRequest({ method: d.method, url: d.url, headers: d.requestHeaders, pagePath });
+  });
+  ses.webRequest.onCompleted(WATCH, (d) => {
+    const kind = Sidebar.mutationKind(d.method, d.url);
+    if (kind === 'chats') notifyChatsChanged();
+    else if (kind === 'code') notifyCodeChanged();
+  });
+
   const CLAUDE_PERMS = new Set(['media', 'clipboard-read', 'clipboard-sanitized-write', 'notifications', 'fullscreen']);
   const SHELL_PERMS = new Set(['local-fonts']);
   const allowed = (url, permission) => {
@@ -661,6 +677,7 @@ if (!app.requestSingleInstanceLock()) {
   app.whenReady().then(() => {
     loadSettings();
     nativeTheme.themeSource = settings.theme.mode === 'dark' ? 'dark' : 'light';
+    createSidebarData();
     setupSession();
     registerIpc();
     buildMenu();

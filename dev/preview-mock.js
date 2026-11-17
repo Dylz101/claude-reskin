@@ -5,7 +5,7 @@
  */
 (function () {
   'use strict';
-  var listeners = { state: [], 'chats-changed': [] };
+  var listeners = { state: [], 'chats-changed': [], 'code-changed': [] };
   var seq = 0;
   var CHATS = [
     { id: '1a2b3c4d-0000-4000-8000-000000000001', title: 'userstyle dark-mode scope', starred: true, project: 'reskin', updated: '2026-11-17T09:00:00Z' },
@@ -13,6 +13,11 @@
     { id: '1a2b3c4d-0000-4000-8000-000000000003', title: 'cederberg hiking plan', starred: false, project: '', updated: '2026-11-16T08:00:00Z' },
     { id: '1a2b3c4d-0000-4000-8000-000000000004', title: 'explain css :has()', starred: false, project: '', updated: '2026-11-15T08:00:00Z' },
     { id: '1a2b3c4d-0000-4000-8000-000000000005', title: 'pane layout ideas', starred: true, project: 'reskin', updated: '2026-11-14T08:00:00Z' }
+  ];
+  var mockLoaded = 0;
+  var SESSIONS = [
+    { id: 'session_01AbCdEf', title: 'fix sidebar recents', status: 'running', repo: 'Dylz101/claude-reskin', updated: '2026-11-17T10:00:00Z' },
+    { id: 'session_01GhIjKl', title: 'tile quote calculator', status: 'idle', repo: 'Dylz101/home', updated: '2026-11-16T10:00:00Z' }
   ];
   var titleOf = function (url) {
     var c = CHATS.find(function (x) { return url.indexOf(x.id) >= 0; });
@@ -74,12 +79,25 @@
       else if (ch === 'pane:only') { st.panes = st.panes.filter(function (p) { return p.id === data; }); st.focus = data; emit(); }
       else if (ch === 'pane:split') open('https://claude.ai/new?' + (++seq), true);
       else if (ch === 'chat:open') open('https://claude.ai/chat/' + data.id, data.split);
+      else if (ch === 'session:open') open('https://claude.ai/code/' + data.id, data.split);
       else if (ch === 'nav:go') open('https://claude.ai/' + data, false);
       else if (ch === 'ui:set') { Object.assign(st.ui, data); emit(); }
       else if (ch === 'theme:set') { Object.assign(st.theme, data); emit(); }
     },
-    invoke: function (ch) {
-      if (ch === 'chats:list') return Promise.resolve({ items: CHATS });
+    invoke: function (ch, data) {
+      if (ch === 'chats:list') {
+        // 95 extra chats so the preview can page through recents 30 at a time.
+        var all = CHATS.concat(Array.from({ length: 95 }, function (_, i) {
+          return { id: '1a2b3c4d-0000-4000-8000-' + String(100 + i).padStart(12, '0'), title: 'older chat ' + (i + 1), starred: false, project: '', updated: '2026-10-01T00:00:00Z' };
+        }));
+        var recents = all.filter(function (c) { return !c.starred; });
+        mockLoaded = data && data.more ? mockLoaded + 30 : Math.max(30, mockLoaded);
+        return Promise.resolve({
+          starred: all.filter(function (c) { return c.starred; }),
+          recents: recents.slice(0, mockLoaded), hasMore: mockLoaded < recents.length
+        });
+      }
+      if (ch === 'code:list') return Promise.resolve({ items: SESSIONS });
       if (ch === 'fonts:list') return Promise.resolve([]);
       return Promise.resolve([]);
     },

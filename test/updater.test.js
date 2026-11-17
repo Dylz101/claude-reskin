@@ -19,7 +19,7 @@ const userData = path.join(tmp, 'userData');
 const RAW = 'https://raw.githubusercontent.com/Dylz101/claude-reskin/main/';
 
 function copyProject(dest) {
-  ['bootstrap.js', 'main.js', 'preload.js', 'theme.js', 'package.json', 'shell', 'fonts', 'scripts'].forEach((f) => {
+  ['bootstrap.js', 'main.js', 'preload.js', 'theme.js', 'sidebar-data.js', 'package.json', 'shell', 'fonts', 'scripts'].forEach((f) => {
     fs.cpSync(path.join(ROOT, f), path.join(dest, f), { recursive: true });
   });
 }

@@ -22,7 +22,7 @@ You need [Node.js](https://nodejs.org) 20 or newer.
 
 3. Sign in to claude.ai in the first pane. Email sign-in works everywhere. Google sign-in opens in a small pop-up window.
 4. In claude.ai, open Settings › Appearance and set Color mode to **Match System**. The app's light/dark switch then controls claude.ai's own pages too.
-5. Your chats appear in the app's sidebar a few seconds after you sign in.
+5. Your chats appear in the app's sidebar a few seconds after you sign in. Open `code` once in a pane and your Claude Code sessions appear too.
 
 To build an installable app instead (`.dmg`, `.exe` or `.AppImage` in `dist/`), run one of these on the matching system:
 
@@ -45,6 +45,7 @@ The builds are unsigned, so macOS and Windows will warn the first time you open 
 | To | Do this |
 |---|---|
 | Open a chat in the focused pane | Click its title in the sidebar |
+| See your Claude Code sessions | Open `code` in a pane. While the focused pane is in Code, the sidebar lists sessions instead of chats |
 | Open a chat beside the others | Click the split icon next to its title, or right-click a claude.ai link › Open in new pane |
 | Add an empty pane | `split` in the top bar, the `add pane` strip, or Ctrl/Cmd+\ |
 | Close a pane | × in its header, or Ctrl/Cmd+W |
@@ -84,7 +85,7 @@ To use them, either install them on your computer, or open appearance › `add f
 - `main.js` creates the window. Each pane is an Electron `WebContentsView` loading claude.ai with the shared sign-in session. Links to other sites open in your browser, and claude.ai links that ask for a new window open as a new pane.
 - `shell/` is the frame: top bar, sidebar and appearance panel. It reports where each pane should sit, and `main.js` places the claude.ai views there.
 - `theme.js` turns your settings into the frame's colours and into a stylesheet injected into every claude.ai pane. It overrides claude.ai's CSS variables (`--bg-*`, `--text-*`, `--accent-*`, `--cds-*`, `--df-*` and the font variables).
-- The sidebar's chat list comes from the same requests claude.ai's own sidebar makes, run inside a signed-in pane.
+- `sidebar-data.js` fetches the sidebar's lists with the same requests claude.ai's own sidebar makes, run inside a signed-in pane. It reads the organization claude.ai is using (its `lastActiveOrg` cookie, or the organization claude.ai's own requests name), loads recents 30 at a time with starred chats listed apart, and refreshes whenever claude.ai creates, sends to, renames, stars or deletes a chat. For Claude Code it replays the request claude.ai's Code page makes for its session list, and remembers it (without credentials) for the next launch.
 
 ## When claude.ai changes
 
@@ -99,5 +100,6 @@ Run `npm test` after editing `theme.js` or `bootstrap.js`. To preview the frame 
 ## Limits
 
 - This is an unofficial wrapper, not affiliated with Anthropic. It uses your normal claude.ai account and session.
-- The app's sidebar loads your 60 most recent chats. Press Enter in its search box to search all of them on claude.ai.
+- The sidebar's search covers the chats it has loaded so far (scroll to load more). Press Enter in its search box to search all of them on claude.ai.
+- The Claude Code session list needs one visit to `code` before it can load, because it reuses claude.ai's own request for that list. If that request carries a sign-in token, the app keeps the token in memory only, so the visit is needed again after each launch.
 - There's no find-in-page (Ctrl/Cmd+F) yet.

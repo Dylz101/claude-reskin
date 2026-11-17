@@ -33,7 +33,8 @@
   ];
 
   var state = { panes: [], focus: null, max: 3, theme: T.withDefaults({}), ui: { sidebar: true, appearance: false } };
-  var chats = { items: [], error: null, loaded: false };
+  var chats = { starred: [], recents: [], hasMore: false, loadingMore: false, error: null, loaded: false };
+  var code = { items: [], error: null, loaded: false };
   var fonts = [];          // fonts the main process knows about (bundled + added files)
   var systemFonts = [];    // installed families, once listed
   var paneEls = new Map(); // pane id -> { root, num, title, sub, dot, back, view }
@@ -184,19 +185,36 @@
   // ---------------------------------------------------------------------
   // Sidebar
   // ---------------------------------------------------------------------
+  // The sidebar follows the focused pane, as the desktop app's does: Claude
+  // Code sessions while that pane is in Code, chats everywhere else.
+  function sidebarMode() {
+    var p = state.panes.find(function (x) { return x.id === state.focus; });
+    return p && /^\/code(\/|$)/.test(pathOf(p.url)) ? 'code' : 'chats';
+  }
+  function pathOf(url) { try { return new URL(url).pathname; } catch (e) { return ''; } }
   function chatIdFromUrl(url) {
-    var m = /\/chat\/([0-9a-f-]{8,})/i.exec(url || '');
+    var m = /^\/chat\/([0-9a-f-]{8,})/i.exec(pathOf(url));
+    return m ? m[1] : null;
+  }
+  function sessionIdFromUrl(url) {
+    var m = /^\/code\/(session_[A-Za-z0-9]+)/.exec(pathOf(url));
     return m ? m[1] : null;
   }
 
-  function chatRow(c) {
+  var LIVE_STATUS = /^(running|working|active|in_progress|requires_action|waiting|pending|starting)$/;
+
+  // kind: 'chat' or 'session'. Rows show the pane number a chat is open in.
+  function listRow(c, kind) {
+    var idOf = kind === 'session' ? sessionIdFromUrl : chatIdFromUrl;
     var openAt = -1, focused = false;
     state.panes.forEach(function (p, i) {
-      if (chatIdFromUrl(p.url) === c.id) { openAt = i; if (p.id === state.focus) focused = true; }
+      if (idOf(p.url) === c.id) { openAt = i; if (p.id === state.focus) focused = true; }
     });
-    var row = el('div', { class: 'chat-row' + (openAt >= 0 ? ' is-open' : '') + (focused ? ' is-focused' : '') });
-    var open = el('button', { type: 'button', class: 'chat-open', title: c.project ? c.title + ' · ' + c.project : c.title });
-    open.append(el('span', { class: 'badge', text: openAt >= 0 ? pad(openAt + 1) : '··' }), el('span', { class: 'title', text: c.title }));
+    var live = kind === 'session' && LIVE_STATUS.test(c.status || '');
+    var row = el('div', { class: 'chat-row' + (openAt >= 0 ? ' is-open' : '') + (focused ? ' is-focused' : '') + (live ? ' is-live' : '') });
+    var tip = [c.title, c.project, c.repo, c.status ? c.status.replace(/_/g, ' ') : ''].filter(Boolean).join(' · ');
+    var open = el('button', { type: 'button', class: 'chat-open', title: tip });
+    open.append(el('span', { class: 'badge', text: openAt >= 0 ? pad(openAt + 1) : (live ? '●' : '··') }), el('span', { class: 'title', text: c.title }));
     var full = state.panes.length >= state.max && openAt < 0;
     var split = el('button', {
       type: 'button', class: 'icon-btn chat-split',
@@ -204,57 +222,141 @@
       title: full ? 'Close a pane first, or click the title to open it here' : 'Open in a split pane'
     }, SVG.split);
     if (full) split.disabled = true;
-    open.addEventListener('click', function () { send('chat:open', { id: c.id, split: false }); });
-    split.addEventListener('click', function () { send('chat:open', { id: c.id, split: true }); });
+    var channel = kind === 'session' ? 'session:open' : 'chat:open';
+    open.addEventListener('click', function () { send(channel, { id: c.id, split: false }); });
+    split.addEventListener('click', function () { send(channel, { id: c.id, split: true }); });
     row.append(open, split);
     return row;
   }
 
+  function matches(q) {
+    return function (c) {
+      return !q || [c.title, c.project, c.repo].some(function (s) { return (s || '').toLowerCase().indexOf(q) >= 0; });
+    };
+  }
+
+  var lastMode = null;
   function renderSidebar() {
     $('sidebar').hidden = !state.ui.sidebar;
-    var q = query.trim().toLowerCase();
-    var items = chats.items.filter(function (c) { return !q || c.title.toLowerCase().indexOf(q) >= 0 || (c.project || '').toLowerCase().indexOf(q) >= 0; });
-    var starred = items.filter(function (c) { return c.starred; });
-    var recents = items.filter(function (c) { return !c.starred; }).slice(0, 40);
+    var mode = sidebarMode();
+    if (mode !== lastMode) {
+      lastMode = mode;
+      if (mode === 'code') loadCode();
+    }
+    var isCode = mode === 'code';
+    $('sidebar').setAttribute('data-mode', mode);
+    $('btn-new').querySelector('span').textContent = isCode ? 'new session' : 'new chat';
+    $('search').placeholder = isCode ? 'search sessions' : 'search chats';
+    $('search').setAttribute('aria-label', isCode ? 'Search sessions' : 'Search chats');
+    $('recents-label').textContent = isCode ? 'sessions' : 'recents';
+    document.querySelectorAll('[data-nav]').forEach(function (b) {
+      var where = b.getAttribute('data-nav');
+      b.classList.toggle('is-current', isCode ? where === 'code' : where === 'chats' && /^\/recents/.test(pathOf((state.panes.find(function (p) { return p.id === state.focus; }) || {}).url)));
+    });
 
+    var q = query.trim().toLowerCase();
+    var src = isCode ? code : chats;
+    var starred = isCode ? [] : chats.starred.filter(matches(q));
+    var list = (isCode ? code.items : chats.recents).filter(matches(q));
     var ls = $('list-starred'), lr = $('list-recents');
-    ls.replaceChildren.apply(ls, starred.map(chatRow));
-    lr.replaceChildren.apply(lr, recents.map(chatRow));
+    ls.replaceChildren.apply(ls, starred.map(function (c) { return listRow(c, 'chat'); }));
+    lr.replaceChildren.apply(lr, list.map(function (c) { return listRow(c, isCode ? 'session' : 'chat'); }));
     $('group-starred').hidden = !starred.length;
+
+    var more = $('btn-more');
+    more.hidden = isCode || !chats.hasMore || !!chats.error;
+    more.disabled = chats.loadingMore;
+    more.textContent = chats.loadingMore ? 'loading…' : 'load more';
 
     var note = $('chats-note'), actions = $('chats-actions');
     note.hidden = true; actions.hidden = true;
-    if (!chats.loaded && !chats.error) { note.hidden = false; note.textContent = 'loading your chats…'; }
-    else if (chats.error === 'signed-out') {
-      note.hidden = false; note.textContent = 'Sign in to claude.ai in the pane on the right. Your chats will appear here.';
+    $('btn-open-code').hidden = true;
+    var empty = !list.length && !starred.length;
+    var say = function (text) { note.hidden = false; note.textContent = text; };
+    if (!src.loaded && !src.error) say(isCode ? 'loading your sessions…' : 'loading your chats…');
+    else if (src.error === 'signed-out') { say('Sign in to claude.ai in the pane on the right. Your ' + (isCode ? 'sessions' : 'chats') + ' will appear here.'); actions.hidden = false; }
+    else if (isCode && src.error === 'open-code') {
+      say('Open code in a pane once so the app can read your session list. claude.ai\'s own sidebar there lists them too.');
+      actions.hidden = false; $('btn-open-code').hidden = false;
+    } else if (src.error && empty) {
+      say('Couldn\'t load your ' + (isCode ? 'sessions' : 'chat list') + ' (' + src.error + '). claude.ai\'s own sidebar still works.');
       actions.hidden = false;
-    } else if (chats.error) {
-      note.hidden = false;
-      note.textContent = 'Couldn\'t load your chat list (' + chats.error + '). claude.ai\'s own sidebar still works.';
-      actions.hidden = false;
-    } else if (q && !items.length) {
-      note.hidden = false; note.textContent = 'No loaded chats match. Press Enter to search all chats.';
-    } else if (!chats.items.length) {
-      note.hidden = false; note.textContent = 'No chats yet.';
-    }
-    $('btn-native-sidebar').hidden = !state.theme.hideClaudeSidebar;
+    } else if (q && empty) say(isCode ? 'No sessions match.' : (chats.hasMore ? 'No loaded chats match. Press Enter to search all chats.' : 'No chats match. Press Enter to search on claude.ai.'));
+    else if (src.loaded && !src.error && empty && !q) say(isCode ? 'No sessions yet.' : 'No chats yet.');
+    $('btn-native-sidebar').hidden = !state.theme.hideClaudeSidebar || isCode;
+    fillIfShort();
   }
 
-  var chatTimer = null;
-  var retries = 0;
+  // Load the next page when the list is scrolled near its end, or when it is
+  // too short to scroll at all, the way claude.ai's recents list does.
+  function nearEnd() {
+    var s = $('sidebar');
+    return s.scrollHeight - s.scrollTop - s.clientHeight < 240;
+  }
+  function fillIfShort() {
+    if (sidebarMode() === 'chats' && !query.trim() && chats.hasMore && !chats.loadingMore && !chats.error && state.ui.sidebar && nearEnd()) {
+      requestAnimationFrame(function () { if (nearEnd()) loadMoreChats(); });
+    }
+  }
+
+  var chatTimer = null, codeTimer = null;
+  var retries = 0, codeRetries = 0;
+  var REFRESH_FOCUSED = 30000, REFRESH_IDLE = 120000;
+  var refreshIn = function () { return document.hasFocus() ? REFRESH_FOCUSED : REFRESH_IDLE; };
+  var chatSeq = 0;
+
+  // Panes may still be loading on first launch; retry quietly a few times.
+  var transient = function (err) { return err === 'no-pane' || /Failed to fetch|http 5|bad pane response/.test(err); };
+
+  function applyChats(res) {
+    chats.starred = res.starred || chats.starred;
+    chats.recents = res.recents || chats.recents;
+    chats.hasMore = !!res.hasMore;
+  }
+
   function loadChats() {
     if (!api) return;
     clearTimeout(chatTimer);
-    api.invoke('chats:list').then(function (res) {
-      if (res && res.items) { chats = { items: res.items, error: null, loaded: true }; retries = 0; }
-      else {
-        var err = (res && res.error) || 'unknown error';
-        // Panes may still be loading on first launch; retry quietly a few times.
-        if ((err === 'no-pane' || /Failed to fetch|http 5/.test(err)) && retries < 5) { retries++; chatTimer = setTimeout(loadChats, 3000); return; }
-        chats = { items: chats.items, error: err === 'no-pane' ? 'no claude.ai pane open' : err, loaded: true };
-      }
+    var mySeq = ++chatSeq;
+    api.invoke('chats:list', { more: false }).then(function (res) {
+      if (mySeq !== chatSeq) return; // a newer load has started
+      res = res || { error: 'unknown error' };
+      if (res.error && transient(res.error) && retries < 5) { retries++; chatTimer = setTimeout(loadChats, 3000); return; }
+      if (!res.error) retries = 0;
+      applyChats(res);
+      chats.error = res.error ? (res.error === 'no-pane' ? 'no claude.ai pane open' : res.error) : null;
+      chats.loaded = true;
       renderSidebar();
-      chatTimer = setTimeout(loadChats, 60000);
+      chatTimer = setTimeout(loadChats, refreshIn());
+    });
+  }
+
+  function loadMoreChats() {
+    if (!api || chats.loadingMore || !chats.hasMore) return;
+    chats.loadingMore = true;
+    renderSidebar();
+    api.invoke('chats:list', { more: true }).then(function (res) {
+      chats.loadingMore = false;
+      res = res || {};
+      if (!res.error) applyChats(res);
+      else chats.hasMore = chats.hasMore && transient(res.error);
+      renderSidebar();
+    });
+  }
+
+  function loadCode() {
+    if (!api) return;
+    clearTimeout(codeTimer);
+    api.invoke('code:list').then(function (res) {
+      res = res || { error: 'unknown error' };
+      if (res.error && transient(res.error) && codeRetries < 5) { codeRetries++; codeTimer = setTimeout(loadCode, 3000); return; }
+      if (!res.error) codeRetries = 0;
+      if (res.items) code.items = res.items;
+      code.error = res.error ? (res.error === 'no-pane' ? 'no claude.ai pane open' : res.error) : null;
+      code.loaded = true;
+      renderSidebar();
+      // Sessions only refresh on a timer while the sidebar shows them.
+      if (sidebarMode() === 'code') codeTimer = setTimeout(loadCode, refreshIn());
     });
   }
 
@@ -396,13 +498,19 @@
   $('close-appearance').addEventListener('click', function () { send('ui:set', { appearance: false }); });
   $('btn-split').addEventListener('click', function () { send('pane:split'); });
   $('btn-single').addEventListener('click', function () { if (state.focus != null) send('pane:only', state.focus); });
-  $('btn-new').addEventListener('click', function () { send('nav:go', 'new'); });
+  $('btn-new').addEventListener('click', function () { send('nav:go', sidebarMode() === 'code' ? 'code' : 'new'); });
   document.querySelectorAll('[data-nav]').forEach(function (b) {
     b.addEventListener('click', function () { send('nav:go', b.getAttribute('data-nav')); });
   });
   $('search').addEventListener('input', function (e) { query = e.target.value; renderSidebar(); });
-  $('search').addEventListener('keydown', function (e) { if (e.key === 'Enter') send('nav:go', 'chats'); });
-  $('btn-retry').addEventListener('click', function () { retries = 0; chats.error = null; chats.loaded = false; renderSidebar(); loadChats(); });
+  $('search').addEventListener('keydown', function (e) { if (e.key === 'Enter' && sidebarMode() === 'chats') send('nav:go', 'chats'); });
+  $('sidebar').addEventListener('scroll', function () { if (nearEnd()) fillIfShort(); }, { passive: true });
+  $('btn-more').addEventListener('click', loadMoreChats);
+  $('btn-open-code').addEventListener('click', function () { send('nav:go', 'code'); });
+  $('btn-retry').addEventListener('click', function () {
+    if (sidebarMode() === 'code') { codeRetries = 0; code.error = null; code.loaded = false; renderSidebar(); loadCode(); }
+    else { retries = 0; chats.error = null; chats.loaded = false; renderSidebar(); loadChats(); }
+  });
   $('btn-native-sidebar').addEventListener('click', function () { setTheme({ hideClaudeSidebar: false }, true); });
 
   ['primary', 'secondary', 'accent'].forEach(function (k) {
@@ -458,7 +566,11 @@
       if (prevPanes !== JSON.stringify(s.panes.map(function (p) { return p.url; })) && !chats.loaded) loadChats();
     });
     api.on('chats-changed', loadChats);
-    window.addEventListener('focus', function () { if (chats.loaded) loadChats(); });
+    api.on('code-changed', function () { if (sidebarMode() === 'code' || code.loaded) loadCode(); });
+    window.addEventListener('focus', function () {
+      if (chats.loaded) loadChats();
+      if (sidebarMode() === 'code') loadCode();
+    });
     api.invoke('fonts:list').then(setFonts);
     send('shell:ready');
     setTimeout(loadChats, 2500);
