@@ -62,7 +62,7 @@ svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width:
 #topbar button, #topbar input { -webkit-app-region: no-drag; }
 body.platform-darwin #topbar { padding-left: 84px; }
 .brand { display: flex; align-items: baseline; gap: 10px; }
-.wordmark { font-family: var(--head); font-size: 26px; font-weight: 700; line-height: 1; text-transform: uppercase; letter-spacing: .01em; }
+.wordmark { font-family: var(--head); font-size: 26px; font-weight: 700; line-height: 1; letter-spacing: .01em; }
 .pane-controls { flex: 1; display: flex; justify-content: center; align-items: center; gap: 8px; }
 .pane-count { font-family: var(--head); font-size: 18px; font-weight: 600; letter-spacing: .02em; font-variant-numeric: tabular-nums; }
 
@@ -131,8 +131,9 @@ body.platform-darwin #topbar { padding-left: 84px; }
 }
 .pane-titles h2 {
   margin: 0; font-family: var(--head); font-size: 19px; font-weight: 600; letter-spacing: .015em;
-  text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
+.pane-titles h2::first-letter { text-transform: uppercase; }
 .pane-sub { grid-column: 2; display: flex; align-items: center; gap: 6px; }
 .loading-dot { width: 7px; height: 7px; background: var(--accent); animation: blink 1s steps(2, start) infinite; }
 @keyframes blink { to { visibility: hidden; } }
@@ -151,7 +152,7 @@ body.platform-darwin #topbar { padding-left: 84px; }
   padding: 14px 16px 18px; background: var(--panel); border-left: 1px solid var(--line);
 }
 .drawer-head { display: flex; align-items: center; justify-content: space-between; }
-.drawer-head h2 { margin: 0; font-family: var(--head); font-size: 30px; font-weight: 700; line-height: 1; text-transform: uppercase; letter-spacing: .01em; }
+.drawer-head h2 { margin: 0; font-family: var(--head); font-size: 30px; font-weight: 700; line-height: 1; letter-spacing: .01em; }
 .drawer-section { display: flex; flex-direction: column; gap: 8px; }
 .section-label {
   display: flex; gap: 8px; align-items: baseline; font-size: 11px; letter-spacing: .06em; color: var(--mute);
