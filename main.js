@@ -307,6 +307,10 @@ async function applyTheme(pane) {
     if (pane.cssKey) await wc.removeInsertedCSS(pane.cssKey);
     pane.cssKey = await wc.insertCSS(css, { cssOrigin: 'user' });
   } catch (err) { console.error('Theme injection failed:', err); }
+  // Layout fixes that CSS alone can't make (theme.js, so they update live).
+  if (Theme.paneScript && !wc.isDestroyed()) {
+    wc.executeJavaScript(Theme.paneScript(settings.theme), false).catch(() => {});
+  }
 }
 function applyThemeAll() {
   nativeTheme.themeSource = settings.theme.mode === 'dark' ? 'dark' : 'light';
@@ -520,6 +524,15 @@ function buildMenu() {
         { type: 'separator' },
         { label: 'Developer tools for pane', accelerator: IS_MAC ? 'Alt+Cmd+I' : 'Ctrl+Shift+I', click: () => withFocused((wc) => wc.toggleDevTools()) },
         { label: 'Developer tools for app shell', click: () => shellView && shellView.webContents.toggleDevTools() },
+        {
+          label: 'Copy layout report for pane',
+          click: () => withFocused((wc) => {
+            if (!Theme.layoutReportScript) return;
+            wc.executeJavaScript(Theme.layoutReportScript(), false)
+              .then((text) => clipboard.writeText(String(text)))
+              .catch((err) => clipboard.writeText('layout report failed: ' + err));
+          })
+        },
         { type: 'separator' },
         { role: 'togglefullscreen' }
       ]

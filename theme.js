@@ -309,12 +309,125 @@
     return L.join('\n');
   }
 
+  // ---- layout fix, run inside each claude.ai pane ---------------------------
+  // Hiding claude.ai's sidebar leaves the space it reserved on the left, so the
+  // chat column (and the message box) sits right of centre. This finds that
+  // column by geometry rather than class names, checks the gap beside it is
+  // empty, and removes whatever margin, padding or offset creates the gap.
+  // It re-checks whenever claude.ai redraws, and undoes itself when the
+  // sidebar setting is turned off.
+  function layoutFix(enabled) {
+    var st = window.__reskinLayout;
+    if (!st) {
+      st = window.__reskinLayout = { enabled: false, touched: [], queued: false, log: [] };
+      st.fix = function (el, prop, value) {
+        if (el.style.getPropertyValue(prop) === value && el.style.getPropertyPriority(prop) === 'important') return;
+        // Remember any inline value claude.ai set, so switching off restores it.
+        st.touched.push({ el: el, prop: prop, was: el.style.getPropertyValue(prop), wasPriority: el.style.getPropertyPriority(prop) });
+        el.style.setProperty(prop, value, 'important');
+        st.log.push(prop + ' on <' + el.tagName.toLowerCase() + ' class="' + String(el.className).slice(0, 80) + '">');
+      };
+      st.revert = function () {
+        st.touched.slice().reverse().forEach(function (t) {
+          if (t.was) t.el.style.setProperty(t.prop, t.was, t.wasPriority);
+          else t.el.style.removeProperty(t.prop);
+        });
+        st.touched = [];
+      };
+      st.run = function () {
+        st.queued = false;
+        st.touched = st.touched.filter(function (t) { return t.el.isConnected; });
+        if (!st.enabled) return;
+        if (!document.querySelector('.dframe-sidebar, .z-sidebar')) return; // claude.ai's mobile layout: nothing reserved
+        var anchor = document.querySelector('[data-testid="chat-input-grid-area"], fieldset, [contenteditable="true"], textarea');
+        if (!anchor) return;
+        var m = null, p = null;
+        for (var el = anchor; el && el.parentElement && el !== document.body; el = el.parentElement) {
+          var r = el.getBoundingClientRect(), pr = el.parentElement.getBoundingClientRect();
+          var leftGap = r.left - pr.left, rightGap = pr.right - r.right;
+          // Reserved sidebar space is one-sided; equal gaps mean ordinary centring.
+          if (leftGap > 2 && pr.left <= 1 && rightGap < leftGap - 20) { m = el; p = el.parentElement; break; }
+        }
+        if (!m) return;
+        var mr = m.getBoundingClientRect(), prr = p.getBoundingClientRect();
+        var gap = mr.left - prr.left;
+        if (gap < 30 || gap > 480) return;
+
+        // Only act when the gap is empty background, not a real panel.
+        var probe = document.elementFromPoint(prr.left + gap / 2, Math.min(window.innerHeight - 4, Math.max(mr.top, 0) + 40));
+        if (probe && probe !== p && !probe.contains(p)) {
+          var spacer = probe;
+          while (spacer.parentElement && spacer.parentElement !== p) spacer = spacer.parentElement;
+          var empty = spacer.parentElement === p && spacer !== m && !spacer.textContent.trim() &&
+            !spacer.querySelector('img, svg, button, a, input, textarea');
+          if (empty) { st.fix(spacer, 'display', 'none'); }
+          return;
+        }
+
+        var ms = getComputedStyle(m), ps = getComputedStyle(p);
+        var near = function (v) { return Math.abs(parseFloat(v) - gap) < 2; };
+        var flushRight = Math.abs(mr.right - prr.right) < 2;
+        if (near(ms.marginLeft)) st.fix(m, 'margin-left', '0px');
+        else if (near(ms.paddingLeft) && m !== anchor) st.fix(m, 'padding-left', '0px');
+        else if (near(ps.paddingLeft)) st.fix(p, 'padding-left', '0px');
+        else if (ms.position !== 'static' && near(ms.left)) st.fix(m, 'left', '0px');
+        else if (/grid/.test(ps.display) && ps.gridTemplateColumns.split(' ').length === 2) st.fix(m, 'grid-column', '1 / -1');
+        else if (/translate/.test(ms.transform) || /matrix/.test(ms.transform)) st.fix(m, 'transform', 'none');
+        else { st.log.push('no known cause for a ' + Math.round(gap) + 'px gap'); return; }
+
+        // If the column was sized to the space left of the sidebar, let it fill the row again.
+        var after = m.getBoundingClientRect();
+        if (flushRight && after.right < prr.right - 2) st.fix(m, 'width', 'auto');
+        if (flushRight && m.getBoundingClientRect().right < prr.right - 2) st.fix(m, 'width', '100%');
+      };
+      st.schedule = function () {
+        if (st.queued) return;
+        st.queued = true;
+        requestAnimationFrame(st.run);
+      };
+      new MutationObserver(st.schedule).observe(document.documentElement, { childList: true, subtree: true });
+      window.addEventListener('resize', st.schedule);
+    }
+    st.enabled = !!enabled;
+    if (!st.enabled) st.revert();
+    st.schedule();
+    return true;
+  }
+
+  function paneScript(settings) {
+    var s = withDefaults(settings);
+    return '(' + layoutFix.toString() + ')(' + JSON.stringify(!!s.hideClaudeSidebar) + ');';
+  }
+
+  // Describes the chat column's ancestors, for diagnosing layout problems.
+  function layoutReport() {
+    var anchor = document.querySelector('[data-testid="chat-input-grid-area"], fieldset, [contenteditable="true"], textarea');
+    var out = ['url: ' + location.pathname, 'viewport: ' + innerWidth + 'x' + innerHeight,
+      'sidebar present: ' + !!document.querySelector('.dframe-sidebar, .z-sidebar')];
+    var st = window.__reskinLayout;
+    if (st) out.push('fixes applied: ' + (st.log.slice(-8).join(' | ') || 'none'));
+    for (var el = anchor; el && el !== document.documentElement; el = el.parentElement) {
+      var r = el.getBoundingClientRect(), cs = getComputedStyle(el);
+      out.push([el.tagName.toLowerCase(),
+        'class="' + String(el.className).slice(0, 140) + '"',
+        el.getAttribute('data-testid') ? 'testid=' + el.getAttribute('data-testid') : '',
+        'x=' + Math.round(r.left) + ' w=' + Math.round(r.width),
+        'display=' + cs.display, 'pos=' + cs.position,
+        'ml=' + cs.marginLeft, 'pl=' + cs.paddingLeft, 'left=' + cs.left,
+        /grid/.test(cs.display) ? 'cols=' + cs.gridTemplateColumns : ''].filter(Boolean).join('  '));
+    }
+    if (!anchor) out.push('no message box found on this page');
+    return out.join('\n');
+  }
+  function layoutReportScript() { return '(' + layoutReport.toString() + ')()'; }
+
   var api = {
     DEFAULTS: DEFAULTS, PALETTES: PALETTES,
     HEAD_FALLBACK: HEAD_FALLBACK, BODY_FALLBACK: BODY_FALLBACK,
     rgb: rgb, hex: hex, mix: mix, lum: lum, contrast: contrast, on: on, triplet: triplet,
     withDefaults: withDefaults, sanitize: sanitize, quoteFamily: quoteFamily,
-    fontStacks: fontStacks, palette: palette, claudeCSS: claudeCSS
+    fontStacks: fontStacks, palette: palette, claudeCSS: claudeCSS,
+    paneScript: paneScript, layoutReportScript: layoutReportScript
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.ReskinTheme = api;

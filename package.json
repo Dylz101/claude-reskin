@@ -1,7 +1,7 @@
 {
   "name": "claude-reskin",
   "productName": "Claude Reskin",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "A desktop shell for claude.ai with split panes, a custom colour scheme and font controls.",
   "main": "bootstrap.js",
   "private": true,
