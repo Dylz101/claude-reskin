@@ -1,0 +1,49 @@
+{
+  "name": "claude-reskin",
+  "productName": "Claude Reskin",
+  "version": "0.2.0",
+  "description": "A desktop shell for claude.ai with split panes, a custom colour scheme and font controls.",
+  "main": "bootstrap.js",
+  "private": true,
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron main.js",
+    "test": "node test/theme.test.js && node test/updater.test.js",
+    "release": "node scripts/release.js",
+    "dist:mac": "electron-builder --mac",
+    "dist:win": "electron-builder --win",
+    "dist:linux": "electron-builder --linux"
+  },
+  "devDependencies": {
+    "electron": "45.2.1",
+    "electron-builder": "26.18.1"
+  },
+  "build": {
+    "appId": "local.claude-reskin",
+    "productName": "Claude Reskin",
+    "files": [
+      "bootstrap.js",
+      "manifest.json",
+      "main.js",
+      "preload.js",
+      "theme.js",
+      "shell/**",
+      "fonts/**"
+    ],
+    "mac": {
+      "category": "public.app-category.productivity",
+      "target": "dmg"
+    },
+    "win": {
+      "target": "nsis"
+    },
+    "linux": {
+      "target": "AppImage"
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Dylz101/claude-reskin.git"
+  }
+}
