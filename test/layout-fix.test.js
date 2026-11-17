@@ -68,6 +68,46 @@ const REAL_PANEL =
   assert.ok(await page.isVisible('aside'));
   passed++; console.log('ok leaves a real left-hand panel alone');
 
+  // Claude Code keeps claude.ai's sidebar (its session list) and native layout.
+  const realCSS = T.claudeCSS({ hideClaudeSidebar: true });
+  const codePage = `<div class="wrap" style="display:flex"><nav class="dframe-sidebar" style="width:260px;flex:none">sessions</nav>
+    <main style="flex:1" data-frame-mode="code">${box}</main></div>`;
+  await page.setContent(`<style>${realCSS}</style>${codePage}`);
+  await page.evaluate(T.paneScript({ hideClaudeSidebar: true }));
+  await settle();
+  assert.ok(await page.isVisible('nav.dframe-sidebar'), 'Code sidebar must stay visible');
+  assert.equal(await page.evaluate(() => window.__reskinLayout.touched.length), 0);
+  passed++; console.log('ok Claude Code keeps its own sidebar and layout');
+
+  // Chat page hides the sidebar; switching the same page to Code brings it back.
+  const chatPage = `<div class="wrap"><nav class="dframe-sidebar" style="position:fixed;width:288px">recents</nav>
+    <main id="m" style="margin-left:288px">${box}</main></div>`;
+  await page.setContent(`<style>${realCSS} body{margin:0}</style>${chatPage}`);
+  await page.evaluate(T.paneScript({ hideClaudeSidebar: true }));
+  await settle();
+  assert.equal(await page.isVisible('nav.dframe-sidebar'), false, 'chat sidebar hidden');
+  assert.equal(await boxCentreOffset(), 0, 'chat centred');
+  await page.evaluate(() => document.getElementById('m').setAttribute('data-frame-mode', 'code'));
+  await settle();
+  assert.ok(await page.isVisible('nav.dframe-sidebar'), 'sidebar back in Code');
+  assert.equal(await page.evaluate(() => document.getElementById('m').style.marginLeft), '288px', 'claude.ai margin restored');
+  passed++; console.log('ok moving from a chat to Code restores claude.ai\'s layout');
+
+  // A hidden or tiny text field earlier in the page is not used as the anchor.
+  await page.setContent(`<style>${css}</style><textarea style="width:1px;height:1px;position:absolute;left:5px"></textarea>${PAGES['margin on the chat column']}`);
+  await page.evaluate(T.paneScript({ hideClaudeSidebar: true }));
+  await settle();
+  assert.equal(await boxCentreOffset(), 0, 'centres the real message box');
+  passed++; console.log('ok ignores tiny or hidden text fields');
+
+  // A newer paneScript replaces the logic in a page that is already running.
+  await page.setContent(`<style>${css}</style>${PAGES['margin on the chat column']}`);
+  await page.evaluate(() => { window.__reskinLayout = { enabled: true, touched: [], queued: false, log: [], run: function () {}, schedule: function () {} }; });
+  await page.evaluate(T.paneScript({ hideClaudeSidebar: true }));
+  await settle();
+  assert.equal(await boxCentreOffset(), 0, 'new logic took over');
+  passed++; console.log('ok a live update reaches already-open pages');
+
   await page.setContent(`<style>${css}</style>${PAGES['margin on the chat column']}`);
   await page.evaluate(T.paneScript({ hideClaudeSidebar: true }));
   await settle();

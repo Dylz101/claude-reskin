@@ -66,7 +66,7 @@ test('claude CSS uses the chosen fonts with fallbacks', () => {
 });
 
 test('claude sidebar hiding follows the setting', () => {
-  assert.match(T.claudeCSS({ hideClaudeSidebar: true }), /\.dframe-sidebar, \.z-sidebar/);
+  assert.match(T.claudeCSS({ hideClaudeSidebar: true }), /:not\(\[data-reskin-code\]\).*\.dframe-sidebar, \.z-sidebar/);
   assert.doesNotMatch(T.claudeCSS({ hideClaudeSidebar: false }), /\.dframe-sidebar, \.z-sidebar/);
 });
 

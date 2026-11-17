@@ -302,8 +302,10 @@
 
     // 6. The app has its own chat list, so claude.ai's sidebar can be hidden.
     //    Everything it offers is still reachable from the app's sidebar.
+    //    Not in Claude Code: its sidebar holds the session list, which the
+    //    app's sidebar doesn't show. paneScript marks Code pages on <html>.
     if (s.hideClaudeSidebar) {
-      block('.dframe-sidebar, .z-sidebar', { 'display': 'none' });
+      block('html:not([data-reskin-code]):not(:has([data-frame-mode="code"])) :is(.dframe-sidebar, .z-sidebar)', { 'display': 'none' });
     }
 
     return L.join('\n');
@@ -317,9 +319,22 @@
   // It re-checks whenever claude.ai redraws, and undoes itself when the
   // sidebar setting is turned off.
   function layoutFix(enabled) {
+    // The widest visible message box on the page (hidden or tiny fields elsewhere are ignored).
+    function findAnchor() {
+      var best = null, bestW = 0;
+      var list = document.querySelectorAll('[data-testid="chat-input-grid-area"], fieldset, [contenteditable="true"], textarea');
+      for (var i = 0; i < list.length; i++) {
+        var r = list[i].getBoundingClientRect();
+        if (r.width > bestW && r.height > 10 && r.bottom > 0 && r.top < innerHeight) { best = list[i]; bestW = r.width; }
+      }
+      return best;
+    }
+    // State survives across calls; the functions are replaced on every call so
+    // a live update to this code reaches pages that are already open.
     var st = window.__reskinLayout;
-    if (!st) {
-      st = window.__reskinLayout = { enabled: false, touched: [], queued: false, log: [] };
+    var fresh = !st;
+    if (fresh) st = window.__reskinLayout = { enabled: false, touched: [], queued: false, log: [] };
+    {
       st.fix = function (el, prop, value) {
         if (el.style.getPropertyValue(prop) === value && el.style.getPropertyPriority(prop) === 'important') return;
         // Remember any inline value claude.ai set, so switching off restores it.
@@ -337,9 +352,13 @@
       st.run = function () {
         st.queued = false;
         st.touched = st.touched.filter(function (t) { return t.el.isConnected; });
-        if (!st.enabled) return;
+        // Claude Code keeps claude.ai's own sidebar (its session list), so
+        // leave its layout untouched.
+        var isCode = /^\/code(\/|$)/.test(location.pathname) || !!document.querySelector('[data-frame-mode="code"]');
+        document.documentElement.toggleAttribute('data-reskin-code', isCode);
+        if (!st.enabled || isCode) { st.revert(); return; }
         if (!document.querySelector('.dframe-sidebar, .z-sidebar')) return; // claude.ai's mobile layout: nothing reserved
-        var anchor = document.querySelector('[data-testid="chat-input-grid-area"], fieldset, [contenteditable="true"], textarea');
+        var anchor = findAnchor();
         if (!anchor) return;
         var m = null, p = null;
         for (var el = anchor; el && el.parentElement && el !== document.body; el = el.parentElement) {
@@ -385,8 +404,19 @@
         st.queued = true;
         requestAnimationFrame(st.run);
       };
-      new MutationObserver(st.schedule).observe(document.documentElement, { childList: true, subtree: true });
-      window.addEventListener('resize', st.schedule);
+    }
+    var kick = function () { window.__reskinLayout.schedule(); };
+    if (st.root !== document.documentElement) { // first run, or the document was replaced
+      if (st.observer) st.observer.disconnect();
+      st.observer = new MutationObserver(kick);
+      st.observer.observe(document.documentElement, {
+        childList: true, subtree: true, attributes: true, attributeFilter: ['data-frame-mode']
+      });
+      st.root = document.documentElement;
+    }
+    if (fresh) {
+      window.addEventListener('resize', kick);
+      window.addEventListener('popstate', kick);
     }
     st.enabled = !!enabled;
     if (!st.enabled) st.revert();

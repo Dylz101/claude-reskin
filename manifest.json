@@ -1,12 +1,12 @@
 {
-  "version": "0.2.1",
-  "build": 20261117132305,
+  "version": "0.2.2",
+  "build": 20261117132908,
   "minLoader": 1,
-  "published": "2026-11-17T13:23:05.579Z",
+  "published": "2026-11-17T13:29:08.300Z",
   "files": {
     "main.js": "d49b961e34fa292bbd73672ae4e37784b25cf18eb14e150c2babed5d7a299e42",
     "preload.js": "89c17860e386fe5407b64ec2525b0d34dcdfbcd69b33415f52c61ea64afbd42e",
-    "theme.js": "508f44f6020148ec51d41d1971ed66d431923d1167e4428b2b30ad3dc70dc847",
+    "theme.js": "4b2f24dbccd24c867b713c8aec434573824330d5596f6db932d90e69c95d4af5",
     "shell/index.html": "c296bb1a35689536adc4a3b014c1eb2066c06490bd1019035602199412daeaa3",
     "shell/shell.css": "0480d01b589df280e9baa76b71b85dd3fe48b298e3aa8abde783313778cfc50e",
     "shell/shell.js": "9723076bcf214737102fddd4d39b6820a336ec6e7eb256319e0d684a4b8beee0",
