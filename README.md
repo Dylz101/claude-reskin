@@ -62,9 +62,8 @@ Open panes, colours, fonts and window size are saved and restored on the next la
 
 You install the app once. After that it updates itself from [github.com/Dylz101/claude-reskin](https://github.com/Dylz101/claude-reskin):
 
-- It checks five seconds after launch, then every ten minutes. Click the version in the top bar, or choose File › Check for updates, to check now.
-- Changes to the look, the frame and fonts apply while the app runs. The top bar shows "updated to v…".
-- Changes to the app's core download in the background. The top bar then shows **restart to update**. Your panes reopen after the restart.
+- Click the version in the top bar to update to the latest version in one go. Changes to the look, the frame and fonts apply while the app runs, and the top bar shows "updated to v…". Changes to the app's core download and the app restarts straight away. Your panes reopen after the restart.
+- It also checks by itself five seconds after launch, then every ten minutes. Those checks never restart the app: they download in the background and the top bar shows **restart to update** until you click it. File › Check for updates does the same.
 - Every downloaded file is checked against the SHA-256 listed in `manifest.json` before it's used. A file that doesn't match is ignored and the app keeps running the copy it has.
 - Downloads are kept in the app's data folder under `payload/`. Deleting that folder returns the app to the copy you installed.
 

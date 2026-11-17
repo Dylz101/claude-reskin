@@ -463,21 +463,42 @@
   // ---------------------------------------------------------------------
   // Wiring
   // ---------------------------------------------------------------------
+  // One click on the version button updates to the newest build. Updates to
+  // the look apply in place; anything else restarts the app straight away,
+  // reopening the same panes. Background checks never restart on their own:
+  // they only download and show "restart to update".
+  var updateAsked = null; // { from: state when clicked, seen: the check has started }
+  var restarting = false;
+
   function renderUpdate() {
     var u = state.update || { state: 'off' };
     var b = $('btn-update');
     var v = u.version ? 'v' + u.version : '';
-    var text = v, title = 'Check for updates';
+    if (updateAsked && (u.state === 'checking' || u.state === 'downloading')) updateAsked.seen = true;
+    if (updateAsked && updateAsked.seen) {
+      // The check found a build that needs a restart, or confirmed the one
+      // already downloaded is the newest.
+      if (u.state === 'restart') {
+        updateAsked = null;
+        restarting = true;
+        send('update:restart');
+      } else if (u.state === 'current' || u.state === 'updated' || u.state === 'error' || u.state === 'reinstall') {
+        updateAsked = null;
+      }
+    }
+    var text = v, title = 'Update to the latest version';
     if (u.state === 'off') { text = 'dev build'; title = 'Started without the updater (npm run dev)'; }
+    else if (restarting) { text = 'restarting…'; title = 'Restarting into ' + v + '. Your panes reopen.'; }
     else if (u.state === 'checking') text = 'checking…';
     else if (u.state === 'downloading') text = 'downloading v' + (u.remoteVersion || '') + '…';
+    else if (u.state === 'current') title = v + ' is the latest version. Click to check again.';
     else if (u.state === 'updated') { text = 'updated to ' + v; title = 'Updated while running. Click to check again.'; }
-    else if (u.state === 'restart') { text = 'restart to update'; title = 'v' + u.version + ' is downloaded. Your panes reopen after the restart.'; }
+    else if (u.state === 'restart') { text = 'restart to update'; title = 'v' + u.version + ' is downloaded. Click to restart into it; your panes reopen.'; }
     else if (u.state === 'reinstall') { text = 'v' + (u.remoteVersion || '') + ' needs a reinstall'; title = 'This update changes the launcher. Download the app again from GitHub.'; }
-    else if (u.state === 'error') { text = v + ' · check failed'; title = u.message || 'Update check failed'; }
+    else if (u.state === 'error') { text = v + ' · check failed'; title = (u.message || 'Update check failed') + '. Click to try again.'; }
     b.textContent = text;
     b.title = title;
-    b.disabled = u.state === 'off' || u.state === 'checking' || u.state === 'downloading';
+    b.disabled = u.state === 'off' || u.state === 'checking' || u.state === 'downloading' || restarting;
     b.classList.toggle('is-ready', u.state === 'restart');
     b.classList.toggle('is-news', u.state === 'updated' || u.state === 'reinstall');
   }
@@ -492,7 +513,15 @@
 
   $('toggle-sidebar').addEventListener('click', function () { send('ui:set', { sidebar: !state.ui.sidebar }); });
   $('btn-update').addEventListener('click', function () {
-    send((state.update && state.update.state === 'restart') ? 'update:restart' : 'update:check');
+    var u = state.update || { state: 'off' };
+    if (u.state === 'off' || restarting) return;
+    // Check first even when a build is already downloaded, so the restart
+    // lands on the newest one.
+    var asked = updateAsked = { from: u.state, seen: false };
+    send('update:check');
+    // A background check already running won't announce 'checking'; act on
+    // whatever it settles on.
+    setTimeout(function () { if (updateAsked === asked && !asked.seen) { asked.seen = true; renderUpdate(); } }, 4000);
   });
   $('btn-appearance').addEventListener('click', function () { send('ui:set', { appearance: !state.ui.appearance }); });
   $('close-appearance').addEventListener('click', function () { send('ui:set', { appearance: false }); });
