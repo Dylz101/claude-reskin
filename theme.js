@@ -276,9 +276,9 @@
     block('body', { 'font-family': f.body });
     block('h1, h2, h3, .font-claude-response :is(h1, h2, h3)', {
       'font-family': f.head,
-      'letter-spacing': '0.01em',
-      'text-transform': 'uppercase'
+      'letter-spacing': '0.01em'
     });
+    block(':is(h1, h2, h3, .font-claude-response :is(h1, h2, h3))::first-letter', { 'text-transform': 'uppercase' });
     block('code, pre, kbd, .code-block__code, .code-block__code *', { 'font-family': f.mono });
 
     // 5. Reading comfort: tighter leading, clearer paragraph breaks.
