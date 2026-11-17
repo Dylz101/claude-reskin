@@ -152,7 +152,7 @@ body.platform-darwin #topbar { padding-left: 84px; }
   padding: 14px 16px 18px; background: var(--panel); border-left: 1px solid var(--line);
 }
 .drawer-head { display: flex; align-items: center; justify-content: space-between; }
-.drawer-head h2 { margin: 0; font-family: var(--head); font-size: 30px; font-weight: 700; line-height: 1; text-transform: uppercase; letter-spacing: .01em; }
+.drawer-head h2 { margin: 0; font-family: var(--head); font-size: 30px; font-weight: 700; line-height: 1; letter-spacing: .01em; }
 .drawer-section { display: flex; flex-direction: column; gap: 8px; }
 .section-label {
   display: flex; gap: 8px; align-items: baseline; font-size: 11px; letter-spacing: .06em; color: var(--mute);
