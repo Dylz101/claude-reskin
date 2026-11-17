@@ -102,12 +102,12 @@
     var dot = el('span', { class: 'loading-dot', hidden: '' });
     var sub = el('span', { class: 'label' });
     subRow.append(dot, sub);
-    titles.append(title, subRow);
+    titles.append(num, title, subRow);
     var back = el('button', { type: 'button', class: 'icon-btn', 'aria-label': 'Back', title: 'Back (Ctrl/Cmd+[)' }, SVG.back);
     var reload = el('button', { type: 'button', class: 'icon-btn', 'aria-label': 'Reload pane', title: 'Reload (Ctrl/Cmd+R)' }, SVG.reload);
     var only = el('button', { type: 'button', class: 'icon-btn', 'aria-label': 'Show only this pane', title: 'Show only this pane' }, SVG.only);
     var close = el('button', { type: 'button', class: 'icon-btn', 'aria-label': 'Close pane', title: 'Close pane (Ctrl/Cmd+W)' }, SVG.close);
-    head.append(num, titles, back, reload, only, close);
+    head.append(titles, back, reload, only, close);
     var view = el('div', { class: 'pane-view' });
     root.append(head, view);
 
