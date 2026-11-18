@@ -30,8 +30,10 @@
     ],
     focus: 2, max: 3,
     theme: { mode: 'light', primary: '#111111', secondary: '#d6d6d0', accent: '#ff4f00', headFont: '"Foun"', bodyFont: '"CS Genio Mono"', textSize: 13, hideClaudeSidebar: true },
-    ui: { sidebar: true, appearance: true }
+    ui: { sidebar: true, appearance: true },
+    palettes: []
   };
+  var paletteSeq = 0;
   window.__previewLayout = [];
 
   function emit() {
@@ -83,6 +85,9 @@
       else if (ch === 'nav:go') open('https://claude.ai/' + data, false);
       else if (ch === 'ui:set') { Object.assign(st.ui, data); emit(); }
       else if (ch === 'theme:set') { Object.assign(st.theme, data); emit(); }
+      else if (ch === 'palette:save') { st.palettes = window.ReskinTheme.addSaved(st.palettes, data.name, data.colours, 'p' + (++paletteSeq)); emit(); }
+      else if (ch === 'palette:rename') { st.palettes = window.ReskinTheme.renameSaved(st.palettes, data.id, data.name); emit(); }
+      else if (ch === 'palette:remove') { st.palettes = window.ReskinTheme.removeSaved(st.palettes, data); emit(); }
     },
     invoke: function (ch, data) {
       if (ch === 'chats:list') {

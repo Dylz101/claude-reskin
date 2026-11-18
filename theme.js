@@ -129,6 +129,92 @@
     return out;
   }
 
+  // ---- saved colour combinations ------------------------------------------
+  // A saved combination holds colours only: mode, background, primary,
+  // secondary and accent. Fonts and text size are left as they are.
+  var MAX_SAVED = 24;
+  var SAVED_ID = /^p[0-9a-z]{1,24}$/;
+
+  // The colour part of a theme or palette, or null if a colour is missing.
+  function coloursOf(src) {
+    if (!src || typeof src !== 'object') return null;
+    var c = sanitize({
+      mode: src.mode, background: src.background || '',
+      primary: src.primary, secondary: src.secondary, accent: src.accent
+    });
+    if (!c.primary || !c.secondary || !c.accent) return null;
+    return { mode: c.mode || 'light', background: c.background || '', primary: c.primary, secondary: c.secondary, accent: c.accent };
+  }
+
+  function sameColours(a, b) {
+    var x = coloursOf(a), y = coloursOf(b);
+    return !!x && !!y && x.mode === y.mode && x.background === y.background &&
+      x.primary === y.primary && x.secondary === y.secondary && x.accent === y.accent;
+  }
+
+  function cleanName(name) {
+    return String(name == null ? '' : name).replace(/[\u0000-\u001f\u007f<>]/g, '').replace(/\s+/g, ' ').trim().slice(0, 32);
+  }
+
+  // Saved combinations read back from settings: bad entries and repeated ids
+  // are dropped, and the list is capped.
+  function sanitizeSaved(list) {
+    if (!Array.isArray(list)) return [];
+    var seen = {};
+    var out = [];
+    list.forEach(function (p) {
+      if (out.length >= MAX_SAVED || !p || typeof p.id !== 'string' || !SAVED_ID.test(p.id) || seen[p.id]) return;
+      var c = coloursOf(p);
+      var name = cleanName(p.name);
+      if (!c || !name) return;
+      seen[p.id] = true;
+      out.push({ id: p.id, name: name, mode: c.mode, background: c.background, primary: c.primary, secondary: c.secondary, accent: c.accent });
+    });
+    return out;
+  }
+
+  // The preset or saved combination these colours already match, if any.
+  function findSaved(saved, colours) {
+    var all = PALETTES.concat(saved || []);
+    for (var i = 0; i < all.length; i++) if (sameColours(all[i], colours)) return all[i];
+    return null;
+  }
+
+  // "my colours 01", "my colours 02", ... skipping names already in use.
+  function nextSavedName(saved) {
+    var used = {};
+    (saved || []).forEach(function (p) { used[String(p.name).toLowerCase()] = true; });
+    for (var n = 1; ; n++) {
+      var name = 'my colours ' + (n < 10 ? '0' : '') + n;
+      if (!used[name]) return name;
+    }
+  }
+
+  // The list operations return a new list; an invalid request returns the
+  // list unchanged. Saving colours that are already saved (or a preset) does
+  // nothing, so the same combination never appears twice.
+  function addSaved(saved, name, colours, id) {
+    var list = sanitizeSaved(saved);
+    var c = coloursOf(colours);
+    if (!c || list.length >= MAX_SAVED || !SAVED_ID.test(String(id)) || findSaved(list, c)) return list;
+    if (list.some(function (p) { return p.id === id; })) return list;
+    return list.concat([{
+      id: id, name: cleanName(name) || nextSavedName(list),
+      mode: c.mode, background: c.background, primary: c.primary, secondary: c.secondary, accent: c.accent
+    }]);
+  }
+
+  function renameSaved(saved, id, name) {
+    var clean = cleanName(name);
+    return sanitizeSaved(saved).map(function (p) {
+      return p.id === id && clean ? Object.assign({}, p, { name: clean }) : p;
+    });
+  }
+
+  function removeSaved(saved, id) {
+    return sanitizeSaved(saved).filter(function (p) { return p.id !== id; });
+  }
+
   // Wrap a bare font family name in quotes for CSS.
   function quoteFamily(name) {
     return '"' + String(name).replace(/["\\;{}<>]/g, '').trim() + '"';
@@ -476,6 +562,9 @@
     HEAD_FALLBACK: HEAD_FALLBACK, BODY_FALLBACK: BODY_FALLBACK,
     rgb: rgb, hex: hex, mix: mix, lum: lum, contrast: contrast, on: on, isDark: isDark, triplet: triplet,
     withDefaults: withDefaults, sanitize: sanitize, quoteFamily: quoteFamily,
+    MAX_SAVED: MAX_SAVED, coloursOf: coloursOf, sameColours: sameColours, cleanName: cleanName,
+    sanitizeSaved: sanitizeSaved, findSaved: findSaved, nextSavedName: nextSavedName,
+    addSaved: addSaved, renameSaved: renameSaved, removeSaved: removeSaved,
     fontStacks: fontStacks, palette: palette, claudeCSS: claudeCSS,
     paneScript: paneScript, layoutReportScript: layoutReportScript
   };

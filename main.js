@@ -49,6 +49,7 @@ function loadSettings() {
   settings.panes = Array.isArray(settings.panes) && settings.panes.length ? settings.panes.slice(0, MAX_PANES) : [CLAUDE + '/new'];
   settings.focus = Number.isInteger(settings.focus) ? settings.focus : 0;
   settings.fonts = Array.isArray(settings.fonts) ? settings.fonts : [];
+  settings.palettes = Theme.sanitizeSaved(settings.palettes);
   settings.codeEndpoint = settings.codeEndpoint && typeof settings.codeEndpoint.url === 'string' ? settings.codeEndpoint : null;
 }
 
@@ -391,7 +392,7 @@ function pushState() {
       loading: !p.view.webContents.isDestroyed() && p.view.webContents.isLoading(),
       canGoBack: !p.view.webContents.isDestroyed() && p.view.webContents.navigationHistory.canGoBack()
     })),
-    focus: focusId, max: MAX_PANES, theme: settings.theme, ui: settings.ui,
+    focus: focusId, max: MAX_PANES, theme: settings.theme, ui: settings.ui, palettes: settings.palettes,
     platform: process.platform, update
   });
 }
@@ -580,6 +581,20 @@ function registerIpc() {
     pushState();
   });
   ipcMain.on('theme:reset', () => { settings.theme = Theme.withDefaults({}); applyThemeAll(); saveSoon(); pushState(); });
+
+  // Saved colour combinations (colours only; see theme.js).
+  let paletteSeq = 0;
+  const setPalettes = (list) => { settings.palettes = list; saveSoon(); pushState(); };
+  ipcMain.on('palette:save', (_e, data) => {
+    const id = 'p' + Date.now().toString(36) + (++paletteSeq).toString(36);
+    setPalettes(Theme.addSaved(settings.palettes, data && data.name, data && data.colours, id));
+  });
+  ipcMain.on('palette:rename', (_e, data) => {
+    if (data && typeof data.id === 'string') setPalettes(Theme.renameSaved(settings.palettes, data.id, data.name));
+  });
+  ipcMain.on('palette:remove', (_e, id) => {
+    if (typeof id === 'string') setPalettes(Theme.removeSaved(settings.palettes, id));
+  });
 
   ipcMain.on('update:check', () => { if (updater) updater.check(true); });
   ipcMain.on('update:restart', () => { if (update.state === 'restart') restartToUpdate(); });

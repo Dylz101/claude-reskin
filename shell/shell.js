@@ -399,20 +399,140 @@
     select.value = current;
   }
 
-  function renderPalettes() {
-    var host = $('palettes');
-    host.replaceChildren.apply(host, T.PALETTES.map(function (pal) {
-      var th = state.theme;
-      var on = !th.background && th.mode === pal.mode && th.primary === pal.primary && th.secondary === pal.secondary && th.accent === pal.accent;
-      var b = el('button', { type: 'button', class: 'palette', 'aria-pressed': on ? 'true' : 'false' });
-      var sw = el('span', { class: 'swatches' });
-      [pal.primary, pal.secondary, pal.accent].forEach(function (c) { var i = el('i'); i.style.background = c; sw.appendChild(i); });
-      b.append(sw, el('span', { text: pal.name }));
-      b.addEventListener('click', function () {
-        setTheme({ mode: pal.mode, background: '', primary: pal.primary, secondary: pal.secondary, accent: pal.accent }, true);
+  // Presets and saved colour combinations. Saved ones hold colours only, so
+  // applying one leaves fonts and text size alone. The grid is rebuilt only
+  // when what it shows changes, so a name being typed survives the frequent
+  // state updates from the panes.
+  // focus: what to move keyboard focus to after the next rebuild, so a
+  // rebuild for another reason (a colour being picked) doesn't steal it.
+  var paletteUi = { naming: false, nameDraft: '', renaming: null, renameDraft: '', confirmDelete: null, focus: null };
+  var paletteKey = '';
+  var confirmTimer = null;
+
+  function paletteSwatches(pal) {
+    var sw = el('span', { class: 'swatches' });
+    [T.palette(pal).panel, pal.primary, pal.secondary, pal.accent].forEach(function (c) { var i = el('i'); i.style.background = c; sw.appendChild(i); });
+    return sw;
+  }
+  function paletteTip(pal) {
+    return pal.name + ' · ' + pal.mode + ' · background ' + T.palette(pal).panel.toUpperCase() + ', primary ' + pal.primary.toUpperCase() +
+      ', secondary ' + pal.secondary.toUpperCase() + ', accent ' + pal.accent.toUpperCase();
+  }
+  function setPaletteUi(patch) {
+    Object.assign(paletteUi, patch);
+    renderPalettes();
+  }
+
+  function paletteTile(pal, saved, current) {
+    var tile = el('div', { class: 'palette-tile' + (saved ? ' is-saved' : '') });
+    if (saved && paletteUi.renaming === pal.id) {
+      var box = el('div', { class: 'palette is-renaming' });
+      var input = el('input', { type: 'text', class: 'text-input', maxlength: '32', 'aria-label': 'New name for ' + pal.name, autocomplete: 'off', spellcheck: 'false' });
+      input.value = paletteUi.renameDraft;
+      var done = false;
+      var finish = function (keep) {
+        if (done || paletteUi.renaming !== pal.id) return;
+        done = true;
+        var name = input.value.trim();
+        if (keep && name && name !== pal.name) send('palette:rename', { id: pal.id, name: name });
+        setPaletteUi({ renaming: null, renameDraft: '' });
+      };
+      input.addEventListener('input', function () { paletteUi.renameDraft = input.value; });
+      input.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') { e.preventDefault(); finish(true); }
+        else if (e.key === 'Escape') { e.preventDefault(); finish(false); }
       });
-      return b;
-    }));
+      input.addEventListener('blur', function () { if (input.isConnected) finish(true); });
+      box.append(paletteSwatches(pal), input);
+      tile.append(box);
+      if (paletteUi.focus === pal.id) {
+        paletteUi.focus = null;
+        requestAnimationFrame(function () { if (input.isConnected) { input.focus(); input.select(); } });
+      }
+      return tile;
+    }
+    var on = current === pal;
+    var b = el('button', { type: 'button', class: 'palette', 'aria-pressed': on ? 'true' : 'false', title: paletteTip(pal) });
+    b.append(paletteSwatches(pal), el('span', { class: 'palette-name', text: pal.name }));
+    b.addEventListener('click', function () {
+      setTheme({ mode: pal.mode, background: pal.background || '', primary: pal.primary, secondary: pal.secondary, accent: pal.accent }, true);
+    });
+    tile.append(b);
+    if (saved) {
+      var actions = el('div', { class: 'palette-actions' });
+      var rename = el('button', { type: 'button', text: 'rename', 'aria-label': 'Rename ' + pal.name });
+      var confirming = paletteUi.confirmDelete === pal.id;
+      var del = el('button', {
+        type: 'button', class: confirming ? 'is-confirm' : '',
+        text: confirming ? 'confirm' : 'delete',
+        'aria-label': confirming ? 'Confirm deleting ' + pal.name : 'Delete ' + pal.name
+      });
+      rename.addEventListener('click', function () { setPaletteUi({ renaming: pal.id, renameDraft: pal.name, confirmDelete: null, focus: pal.id }); });
+      del.addEventListener('click', function () {
+        clearTimeout(confirmTimer);
+        if (confirming) { send('palette:remove', pal.id); setPaletteUi({ confirmDelete: null }); return; }
+        setPaletteUi({ confirmDelete: pal.id });
+        confirmTimer = setTimeout(function () { if (paletteUi.confirmDelete === pal.id) setPaletteUi({ confirmDelete: null }); }, 4000);
+      });
+      actions.append(rename, del);
+      tile.append(actions);
+      if (confirming) requestAnimationFrame(function () { if (del.isConnected) del.focus(); });
+    }
+    return tile;
+  }
+
+  function renderPaletteSave(saved, current) {
+    var host = $('palette-save');
+    var full = saved.length >= T.MAX_SAVED;
+    if (paletteUi.naming && !current && !full) {
+      var input = el('input', { type: 'text', class: 'text-input', maxlength: '32', placeholder: T.nextSavedName(saved), 'aria-label': 'Name for these colours', autocomplete: 'off', spellcheck: 'false' });
+      input.value = paletteUi.nameDraft;
+      var save = el('button', { type: 'button', class: 'small-btn', text: 'save' });
+      var cancel = el('button', { type: 'button', class: 'small-btn', text: 'cancel' });
+      var commit = function () {
+        send('palette:save', { name: input.value.trim() || T.nextSavedName(saved), colours: T.coloursOf(state.theme) });
+        setPaletteUi({ naming: false, nameDraft: '' });
+      };
+      input.addEventListener('input', function () { paletteUi.nameDraft = input.value; });
+      input.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') { e.preventDefault(); commit(); }
+        else if (e.key === 'Escape') { e.preventDefault(); setPaletteUi({ naming: false, nameDraft: '' }); }
+      });
+      save.addEventListener('click', commit);
+      cancel.addEventListener('click', function () { setPaletteUi({ naming: false, nameDraft: '' }); });
+      host.replaceChildren(input, save, cancel);
+      if (paletteUi.focus === 'name') {
+        paletteUi.focus = null;
+        requestAnimationFrame(function () { if (input.isConnected) input.focus(); });
+      }
+      return;
+    }
+    var btn = el('button', { type: 'button', class: 'small-btn', text: 'save current colours' });
+    btn.disabled = !!current || full;
+    btn.addEventListener('click', function () { setPaletteUi({ naming: true, nameDraft: '', renaming: null, confirmDelete: null, focus: 'name' }); });
+    var note = el('small', { class: 'note' });
+    if (current) note.textContent = 'saved as “' + current.name + '”';
+    else if (full) note.textContent = T.MAX_SAVED + ' saved; delete one to save more';
+    host.replaceChildren(btn, note);
+  }
+
+  function renderPalettes() {
+    var saved = state.palettes || [];
+    var colours = T.coloursOf(state.theme);
+    var current = T.findSaved(saved, colours);
+    var key = JSON.stringify([saved, colours, paletteUi.naming, paletteUi.renaming, paletteUi.confirmDelete]);
+    if (key === paletteKey) return;
+    paletteKey = key;
+    // A combination that was being renamed or deleted may have gone.
+    if (paletteUi.renaming && !saved.some(function (p) { return p.id === paletteUi.renaming; })) paletteUi.renaming = null;
+    var tiles = T.PALETTES.map(function (pal) { return paletteTile(pal, false, current); });
+    if (saved.length) {
+      tiles.push(el('span', { class: 'palette-group', text: 'saved' }));
+      saved.forEach(function (pal) { tiles.push(paletteTile(pal, true, current)); });
+    }
+    var host = $('palettes');
+    host.replaceChildren.apply(host, tiles);
+    renderPaletteSave(saved, current);
   }
 
   function renderAppearance() {

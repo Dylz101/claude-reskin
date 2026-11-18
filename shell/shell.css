@@ -164,7 +164,8 @@ body.platform-darwin #topbar { padding-left: 84px; }
   border: 1px solid var(--line); border-radius: var(--radius); background: transparent;
 }
 .palette[aria-pressed="true"] { border-color: var(--ink); }
-.swatches { display: flex; height: 18px; border-radius: var(--radius); overflow: hidden; }
+/* The outline keeps a swatch visible when it matches the drawer's own colour. */
+.swatches { display: flex; height: 18px; border-radius: var(--radius); overflow: hidden; outline: 1px solid var(--line); }
 .swatches i { flex: 1; }
 .color-row {
   display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 6px 8px; cursor: pointer;
@@ -201,3 +202,17 @@ body.platform-darwin #topbar { padding-left: 84px; }
 .check-row { display: flex; align-items: center; gap: 10px; min-height: 36px; font-size: 12.5px; cursor: pointer; }
 .check-row input { width: 16px; height: 16px; accent-color: var(--primary); }
 .drawer-foot { margin-top: auto; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-top: 12px; border-top: 1px solid var(--line); }
+
+/* ---- saved colour combinations ---- */
+.palette-tile { display: flex; flex-direction: column; min-width: 0; }
+.palette-tile .palette { flex: 1; min-width: 0; }
+.palette-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.palette.is-renaming { border-color: var(--ink); }
+.palette.is-renaming .text-input { height: 26px; padding: 0 6px; font-size: 12px; min-width: 0; }
+.palette-group { grid-column: 1 / -1; margin-top: 6px; font-size: 11px; letter-spacing: .06em; color: var(--mute); }
+.palette-actions { display: flex; gap: 2px; }
+.palette-actions button { height: 26px; padding: 0 6px; border: 0; background: transparent; color: var(--mute); font-size: 11px; }
+.palette-actions button:hover { color: var(--ink); }
+.palette-actions button.is-confirm { color: var(--accent-ink); text-decoration: underline; text-underline-offset: 2px; }
+.palette-save { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.palette-save .text-input { flex: 1 1 140px; min-width: 0; }

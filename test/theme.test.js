@@ -104,4 +104,62 @@ test('braces in generated CSS are balanced', () => {
   assert.equal((css.match(/{/g) || []).length, (css.match(/}/g) || []).length);
 });
 
+test('coloursOf keeps colours only and fills mode and background', () => {
+  assert.deepEqual(T.coloursOf({ primary: '#111111', secondary: '#D6D6D0', accent: '#ff4f00', headFont: '"Foun"', textSize: 16 }),
+    { mode: 'light', background: '', primary: '#111111', secondary: '#d6d6d0', accent: '#ff4f00' });
+  assert.equal(T.coloursOf({ primary: '#111111', secondary: 'red', accent: '#ff4f00' }), null);
+  // A chosen background decides the mode.
+  assert.equal(T.coloursOf({ mode: 'light', background: '#101820', primary: '#ededea', secondary: '#55554f', accent: '#ff5a1f' }).mode, 'dark');
+});
+
+test('findSaved spots presets and saved combinations, ignoring fonts', () => {
+  const theme = T.withDefaults({ headFont: 'Georgia', textSize: 16 });
+  assert.equal(T.findSaved([], theme).id, 'te');
+  const saved = [{ id: 'p1', name: 'mine', mode: 'light', background: '#fdf6e3', primary: '#073642', secondary: '#eee8d5', accent: '#cb4b16' }];
+  assert.equal(T.findSaved(saved, Object.assign({}, theme, saved[0])).id, 'p1');
+  assert.equal(T.findSaved(saved, Object.assign({}, theme, saved[0], { background: '' })), null);
+});
+
+test('addSaved stores a named colour combination once', () => {
+  const colours = { mode: 'light', background: '#fdf6e3', primary: '#073642', secondary: '#eee8d5', accent: '#cb4b16', headFont: 'x' };
+  let list = T.addSaved([], '  solar  ', colours, 'p1');
+  assert.deepEqual(list, [{ id: 'p1', name: 'solar', mode: 'light', background: '#fdf6e3', primary: '#073642', secondary: '#eee8d5', accent: '#cb4b16' }]);
+  assert.equal(T.addSaved(list, 'again', colours, 'p2').length, 1, 'same colours are not saved twice');
+  assert.equal(T.addSaved(list, 'preset', T.PALETTES[0], 'p3').length, 1, 'a preset is not saved again');
+  assert.equal(T.addSaved(list, 'bad id', Object.assign({}, colours, { accent: '#000001' }), 'P 4').length, 1);
+  list = T.addSaved(list, '', Object.assign({}, colours, { accent: '#2f6bff' }), 'p5');
+  assert.equal(list[1].name, 'my colours 01');
+  assert.equal(T.nextSavedName(list), 'my colours 02');
+});
+
+test('addSaved stops at the limit', () => {
+  let list = [];
+  for (let i = 0; i < T.MAX_SAVED + 3; i++) {
+    list = T.addSaved(list, 'n' + i, { mode: 'light', primary: '#111111', secondary: '#d6d6d0', accent: '#' + (0x100000 + i).toString(16) }, 'p' + i);
+  }
+  assert.equal(list.length, T.MAX_SAVED);
+});
+
+test('renameSaved and removeSaved change only the named combination', () => {
+  const base = [
+    { id: 'p1', name: 'one', mode: 'light', background: '', primary: '#111111', secondary: '#d6d6d0', accent: '#2f6bff' },
+    { id: 'p2', name: 'two', mode: 'dark', background: '', primary: '#ededea', secondary: '#55554f', accent: '#2f6bff' }
+  ];
+  const renamed = T.renameSaved(base, 'p2', 'night blue<script>');
+  assert.equal(renamed[1].name, 'night bluescript');
+  assert.equal(renamed[0].name, 'one');
+  assert.deepEqual(T.renameSaved(base, 'p2', '   ').map((p) => p.name), ['one', 'two'], 'an empty name is ignored');
+  assert.deepEqual(T.removeSaved(base, 'p1').map((p) => p.id), ['p2']);
+  assert.deepEqual(T.removeSaved(base, 'nope').map((p) => p.id), ['p1', 'p2']);
+});
+
+test('sanitizeSaved drops broken entries and repeated ids', () => {
+  const ok = { id: 'p1', name: 'one', mode: 'light', primary: '#111111', secondary: '#d6d6d0', accent: '#2f6bff' };
+  const list = T.sanitizeSaved([ok, ok, null, { id: 'p2', name: '', primary: '#111111', secondary: '#d6d6d0', accent: '#2f6bff' },
+    { id: 'p3', name: 'bad', primary: 'url(x)', secondary: '#d6d6d0', accent: '#2f6bff' }, { id: '../x', name: 'x', primary: '#111111', secondary: '#d6d6d0', accent: '#2f6bff' }]);
+  assert.deepEqual(list.map((p) => p.id), ['p1']);
+  assert.equal(list[0].background, '');
+  assert.deepEqual(T.sanitizeSaved('nope'), []);
+});
+
 console.log(`\n${passed} checks passed`);
