@@ -1,0 +1,51 @@
+# Builds the Mac app and publishes it as Claude-Reskin.dmg on the "app"
+# release, so it can be installed without a terminal:
+# https://github.com/Dylz101/claude-reskin/releases/tag/app
+#
+# The installed app keeps itself up to date from main (see bootstrap.js), so
+# a new installer only matters when the launcher changes. It is rebuilt on
+# every release anyway, so a fresh install starts on the newest code.
+name: mac app
+
+on:
+  push:
+    branches: [main]
+    paths: [bootstrap.js, package.json, .github/workflows/mac-app.yml]
+  workflow_dispatch:
+
+concurrency:
+  group: mac-app
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: manifest.json matches the files
+        run: node scripts/release.js --check
+      - run: npm install --no-audit --no-fund
+      # One app for both Apple silicon and Intel Macs. Ad-hoc signed (no Apple
+      # certificate), so the first open needs Open Anyway in System Settings.
+      - name: build
+        run: npx electron-builder --mac --universal --publish never
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - name: publish to the "app" release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          NOTES="Mac app, built from v${VERSION}. Download Claude-Reskin.dmg, open it and drag Claude Reskin into Applications. After that it updates itself from the version button in the top bar."
+          if gh release view app >/dev/null 2>&1; then
+            gh release edit app --title "Claude Reskin for Mac" --notes "$NOTES" --latest
+          else
+            gh release create app --title "Claude Reskin for Mac" --notes "$NOTES" --latest --target "$GITHUB_SHA"
+          fi
+          gh release upload app dist/Claude-Reskin.dmg --clobber

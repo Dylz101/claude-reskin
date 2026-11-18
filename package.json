@@ -1,7 +1,7 @@
 {
   "name": "claude-reskin",
   "productName": "Claude Reskin",
-  "version": "0.2.7",
+  "version": "0.2.8",
   "description": "A desktop shell for claude.ai with split panes, a custom colour scheme and font controls.",
   "main": "bootstrap.js",
   "private": true,
@@ -35,7 +35,10 @@
     ],
     "mac": {
       "category": "public.app-category.productivity",
-      "target": "dmg"
+      "target": "dmg",
+      "artifactName": "Claude-Reskin.${ext}",
+      "identity": "-",
+      "hardenedRuntime": false
     },
     "win": {
       "target": "nsis"

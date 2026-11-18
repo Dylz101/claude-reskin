@@ -39,7 +39,9 @@ const stub = {
     quit: () => {}, on: () => {}
   },
   net: {
+    hang: false, // set to make every request stall, like a dropped connection
     fetch: async (url) => {
+      if (stub.net.hang) return new Promise(() => {});
       const rel = decodeURIComponent(url.replace(RAW, '').replace(/\?.*$/, ''));
       try {
         const buf = fs.readFileSync(path.join(remote, rel));
@@ -64,6 +66,11 @@ function nextReady(updater) {
     updater.once('status', (s) => { if (s.state === 'error') reject(new Error(s.message)); });
   });
 }
+
+// A check that never settles leaves nothing for Node to wait on, so it would
+// exit quietly with code 0. Treat that as a failure.
+let finished = false;
+process.on('beforeExit', () => { if (!finished) { console.error('FAIL an updater check never finished'); process.exit(1); } });
 
 (async () => {
   let passed = 0;
@@ -152,6 +159,27 @@ function nextReady(updater) {
   assert.ok(seen.includes('reinstall'));
   ok('asks for a reinstall when the launcher is too old');
 
+  // 9. A request that never answers times out instead of blocking later checks.
+  u.fetchTimeoutMs = 200;
+  stub.net.hang = true;
+  const during = [];
+  const onStatus = (s) => during.push(s.state === 'error' ? 'error: ' + s.message : s.state);
+  u.on('status', onStatus);
+  const stalled = u.check(true);
+  await sleep(50);
+  await u.check(true); // a click while the first check is stuck
+  await stalled;
+  assert.deepEqual(during.slice(0, 2), ['checking', 'checking']);
+  assert.match(during[2] || '', /^error: GitHub did not answer/);
+  assert.equal(u.busy, false);
+  stub.net.hang = false;
+  during.length = 0;
+  await u.check(true);
+  assert.ok(during.includes('reinstall'), 'the next check runs normally');
+  u.off('status', onStatus);
+  ok('a stalled request times out and the next check still runs');
+
   fs.rmSync(tmp, { recursive: true, force: true });
+  finished = true;
   console.log(`\n${passed} updater checks passed`);
 })().catch((err) => { console.error(err); fs.rmSync(tmp, { recursive: true, force: true }); process.exit(1); });
