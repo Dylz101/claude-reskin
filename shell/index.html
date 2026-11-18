@@ -95,6 +95,14 @@
 
       <section class="drawer-section">
         <span class="section-label"><span class="num">02</span> colours</span>
+        <div class="color-row">
+          <label class="color-row-main" for="pick-background">
+            <input type="color" id="pick-background">
+            <span class="color-text"><b>background</b><small>panes, top bar, menus</small></span>
+          </label>
+          <button type="button" class="link-btn" id="reset-background" hidden>reset</button>
+          <code id="hex-background"></code>
+        </div>
         <label class="color-row" for="pick-primary">
           <input type="color" id="pick-primary">
           <span class="color-text"><b>primary</b><small>buttons, send, avatar</small></span>
@@ -119,6 +127,7 @@
           <button type="button" id="mode-light" aria-pressed="true">light</button>
           <button type="button" id="mode-dark" aria-pressed="false">dark</button>
         </div>
+        <small class="note">A dark background switches to dark mode, and a light one to light. Picking a mode resets the background.</small>
         <small class="note">Set claude.ai › Settings › Appearance › Color mode to Match System once, so its own pages follow this switch.</small>
       </section>
 

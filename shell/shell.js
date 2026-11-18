@@ -403,13 +403,13 @@
     var host = $('palettes');
     host.replaceChildren.apply(host, T.PALETTES.map(function (pal) {
       var th = state.theme;
-      var on = th.mode === pal.mode && th.primary === pal.primary && th.secondary === pal.secondary && th.accent === pal.accent;
+      var on = !th.background && th.mode === pal.mode && th.primary === pal.primary && th.secondary === pal.secondary && th.accent === pal.accent;
       var b = el('button', { type: 'button', class: 'palette', 'aria-pressed': on ? 'true' : 'false' });
       var sw = el('span', { class: 'swatches' });
       [pal.primary, pal.secondary, pal.accent].forEach(function (c) { var i = el('i'); i.style.background = c; sw.appendChild(i); });
       b.append(sw, el('span', { text: pal.name }));
       b.addEventListener('click', function () {
-        setTheme({ mode: pal.mode, primary: pal.primary, secondary: pal.secondary, accent: pal.accent }, true);
+        setTheme({ mode: pal.mode, background: '', primary: pal.primary, secondary: pal.secondary, accent: pal.accent }, true);
       });
       return b;
     }));
@@ -425,6 +425,10 @@
       if (document.activeElement !== input) input.value = th[k];
       $('hex-' + k).textContent = th[k].toUpperCase();
     });
+    var panel = T.palette(th).panel;
+    if (document.activeElement !== $('pick-background')) $('pick-background').value = panel;
+    $('hex-background').textContent = panel.toUpperCase();
+    $('reset-background').hidden = !th.background;
     var ratio = T.palette(th).buttonContrast;
     $('contrast-note').textContent = 'button text contrast ' + ratio.toFixed(1) + ':1' + (ratio >= 4.5 ? ', passes AA' : ', too low for small text');
     $('mode-light').setAttribute('aria-pressed', th.mode === 'light' ? 'true' : 'false');
@@ -545,6 +549,13 @@
   ['primary', 'secondary', 'accent'].forEach(function (k) {
     $('pick-' + k).addEventListener('input', function (e) { var p = {}; p[k] = e.target.value.toLowerCase(); setTheme(p); });
   });
+  $('pick-background').addEventListener('input', function (e) {
+    var c = e.target.value.toLowerCase();
+    var p = modePatch(T.isDark(c) ? 'dark' : 'light'); // also keeps primary and secondary readable
+    p.background = c;
+    setTheme(p);
+  });
+  $('reset-background').addEventListener('click', function () { setTheme({ background: '' }, true); });
   $('mode-light').addEventListener('click', function () { setTheme(modePatch('light'), true); });
   $('mode-dark').addEventListener('click', function () { setTheme(modePatch('dark'), true); });
   $('font-head').addEventListener('change', function (e) { setTheme({ headFont: e.target.value }, true); });
@@ -579,7 +590,7 @@
 
   // Keep the primary readable when switching modes, as the mockup does.
   function modePatch(mode) {
-    var th = state.theme, p = { mode: mode };
+    var th = state.theme, p = { mode: mode, background: '' };
     var panel = mode === 'dark' ? '#1b1b1b' : '#f7f7f4';
     if (T.contrast(th.primary, panel) < 3) p.primary = mode === 'dark' ? '#ededea' : '#111111';
     if (mode === 'dark' && T.lum(th.secondary) > 0.4) p.secondary = '#55554f';
