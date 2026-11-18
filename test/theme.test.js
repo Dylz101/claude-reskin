@@ -33,6 +33,35 @@ test('sanitize rejects bad colours, fonts and sizes', () => {
   assert.equal(out.mode, undefined);
 });
 
+test('a chosen background sets the mode and stays readable', () => {
+  assert.equal(T.sanitize({ background: '#0b2545', mode: 'light' }).mode, 'dark');
+  assert.equal(T.sanitize({ background: '#FDF0D5' }).background, '#fdf0d5');
+  assert.equal(T.sanitize({ background: '#FDF0D5' }).mode, 'light');
+  assert.equal(T.sanitize({ background: 'red' }).background, undefined);
+  assert.equal(T.sanitize({ background: '' }).background, '');
+  ['#0b2545', '#2b1d3a', '#fdf0d5', '#dfe7e2', '#9a9a9a', '#5c5c5c'].forEach((bg) => {
+    const s = Object.assign({}, T.DEFAULTS, T.sanitize({ background: bg }));
+    const p = T.palette(s);
+    assert.equal(p.panel, bg, bg + ' used as the pane colour');
+    assert.ok(T.contrast(p.ink, p.panel) >= 4.5, bg + ' ink');
+    assert.ok(T.contrast(p.mute, p.panel) >= 4.5, bg + ' muted text');
+    assert.ok(T.contrast(p.accentInk, p.panel) >= 4.5, bg + ' accent text');
+  });
+  // A saturated mid-tone can't give muted text 4.5:1, but body text still reads.
+  const red = T.palette(Object.assign({}, T.DEFAULTS, T.sanitize({ background: '#e63946' })));
+  assert.ok(T.contrast(red.ink, red.panel) >= 4.5, 'red ink');
+});
+
+test('a background that does not suit the mode is ignored', () => {
+  assert.equal(T.palette(T.withDefaults({ mode: 'light', background: '#101010' })).panel, '#f7f7f4');
+});
+
+test('no background keeps the original surfaces', () => {
+  const l = T.palette(T.withDefaults({})), d = T.palette(T.withDefaults({ mode: 'dark' }));
+  assert.deepEqual([l.ground, l.panel, l.raised], ['#ebebe7', '#f7f7f4', '#fcfcfa']);
+  assert.deepEqual([d.ground, d.panel, d.raised], ['#141414', '#1b1b1b', '#222222']);
+});
+
 test('quoteFamily strips characters that could break CSS', () => {
   assert.equal(T.quoteFamily('My "Font"; }'), '"My Font"');
 });

@@ -18,6 +18,7 @@
     primary: '#111111',
     secondary: '#d6d6d0',
     accent: '#ff4f00',
+    background: '', // empty: the mode's own background
     headFont: '"Foun"',
     bodyFont: '"CS Genio Mono"',
     textSize: 13,
@@ -67,6 +68,8 @@
     return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
   }
   function on(c) { return contrast(c, '#ffffff') >= contrast(c, '#111111') ? '#ffffff' : '#111111'; }
+  // A background needs light text when white reads better on it than near-black.
+  function isDark(c) { return on(c) === '#ffffff'; }
   function readable(ink, bg) { return contrast(ink, bg) >= 4.5 ? ink : on(bg); }
   // Darken (or lighten) a colour toward the ink until it reaches `min` contrast.
   function ensure(c, bg, ink, min) {
@@ -107,6 +110,13 @@
       if (typeof patch[k] === 'string' && /^#[0-9a-f]{6}$/i.test(patch[k])) out[k] = patch[k].toLowerCase();
     });
     if (patch.mode === 'light' || patch.mode === 'dark') out.mode = patch.mode;
+    // A chosen background sets the mode, so text and claude.ai's own colour
+    // mode always suit it. An empty string returns to the mode's background.
+    if (patch.background === '') out.background = '';
+    else if (typeof patch.background === 'string' && /^#[0-9a-f]{6}$/i.test(patch.background)) {
+      out.background = patch.background.toLowerCase();
+      out.mode = isDark(out.background) ? 'dark' : 'light';
+    }
     ['headFont', 'bodyFont'].forEach(function (k) {
       if (typeof patch[k] === 'string') {
         var v = patch[k].replace(/[;{}<>\\\n\r]/g, '').trim().slice(0, 160);
@@ -139,21 +149,31 @@
     var ground = dark ? '#141414' : '#ebebe7';
     var panel = dark ? '#1b1b1b' : '#f7f7f4';
     var raised = dark ? '#222222' : '#fcfcfa';
+    // A custom background replaces the pane colour; the frame behind it is a
+    // shade darker and menus a shade lighter, in the same steps as the defaults.
+    // One that doesn't suit the mode is ignored rather than left unreadable.
+    var bg = /^#[0-9a-f]{6}$/i.test(s.background || '') ? s.background : '';
+    if (bg && isDark(bg) === dark) {
+      panel = bg;
+      ground = mix(bg, '#000000', dark ? 0.74 : 0.952);
+      raised = mix(bg, '#ffffff', dark ? 0.969 : 0.375);
+    }
     var ink = dark ? '#ededea' : '#121212';
+    if (contrast(ink, panel) < 7) ink = dark ? '#ffffff' : '#000000'; // mid-tone backgrounds
     var side = mix(s.secondary, ground, dark ? 0.28 : 0.5);
     var user = mix(s.secondary, panel, dark ? 0.35 : 0.62);
     var chip = mix(s.secondary, panel, dark ? 0.3 : 0.5);
     var sideInk = readable(ink, side);
     return {
       dark: dark, ground: ground, panel: panel, raised: raised, ink: ink,
-      mute: mix(ink, panel, 0.64),
+      mute: ensure(mix(ink, panel, 0.64), panel, ink, 4.5),
       faint: mix(ink, panel, 0.45),
       line: mix(ink, panel, 0.13),
       lineStrong: mix(ink, panel, 0.26),
       side: side, sideInk: sideInk, sideMute: ensure(mix(sideInk, side, 0.64), side, sideInk, 4.5),
       user: user, userInk: readable(ink, user),
       chip: chip, chipInk: readable(ink, chip),
-      primary: s.primary, onPrimary: on(s.primary), primaryHover: mix(s.primary, ink === '#121212' ? '#ffffff' : '#000000', 0.86),
+      primary: s.primary, onPrimary: on(s.primary), primaryHover: mix(s.primary, dark ? '#000000' : '#ffffff', 0.86),
       secondary: s.secondary,
       accent: s.accent, onAccent: on(s.accent),
       accentInk: ensure(s.accent, panel, ink, 4.5),
@@ -454,7 +474,7 @@
   var api = {
     DEFAULTS: DEFAULTS, PALETTES: PALETTES,
     HEAD_FALLBACK: HEAD_FALLBACK, BODY_FALLBACK: BODY_FALLBACK,
-    rgb: rgb, hex: hex, mix: mix, lum: lum, contrast: contrast, on: on, triplet: triplet,
+    rgb: rgb, hex: hex, mix: mix, lum: lum, contrast: contrast, on: on, isDark: isDark, triplet: triplet,
     withDefaults: withDefaults, sanitize: sanitize, quoteFamily: quoteFamily,
     fontStacks: fontStacks, palette: palette, claudeCSS: claudeCSS,
     paneScript: paneScript, layoutReportScript: layoutReportScript
