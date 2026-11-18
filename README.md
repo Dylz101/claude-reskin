@@ -1,10 +1,21 @@
 # Claude Reskin
 
-A desktop app for claude.ai with up to three chats side by side, your own primary, secondary and accent colours, and heading and body font menus. The look follows the Claude Reskin mockup: lowercase labels, numbered sections, hairline rules and square corners.
+A desktop app for claude.ai with up to three chats side by side, your own background, primary, secondary and accent colours, and heading and body font menus. The look follows the Claude Reskin mockup: lowercase labels, numbered sections, hairline rules and square corners.
 
 Each pane is the real claude.ai page, so everything claude.ai does keeps working: projects, artifacts, Claude Code, file uploads, voice dictation, tools and connectors, extended thinking, sharing and settings. The app adds a frame around it and restyles it with CSS.
 
-## Run it
+## Install on a Mac
+
+No terminal needed.
+
+1. Download [Claude-Reskin.dmg](https://github.com/Dylz101/claude-reskin/releases/download/app/Claude-Reskin.dmg) from the [app release](https://github.com/Dylz101/claude-reskin/releases/tag/app). It runs on Apple silicon and Intel Macs.
+2. Open it and drag Claude Reskin into Applications.
+3. Open Claude Reskin from Applications. The app isn't signed with an Apple developer certificate, so the first time macOS says it can't check it. Click Done, open System Settings › Privacy & Security, scroll to Security and click **Open Anyway** next to Claude Reskin, then confirm. You only do this once.
+4. Sign in to claude.ai in the first pane, then in claude.ai open Settings › Appearance and set Color mode to **Match System**.
+
+From then on the app updates itself: see [Updates](#updates). If you used `npm start` before, the installed app keeps your sign-in, panes and appearance settings.
+
+## Run it from the code
 
 You need [Node.js](https://nodejs.org) 20 or newer.
 
@@ -67,7 +78,7 @@ You install the app once. After that it updates itself from [github.com/Dylz101/
 - Every downloaded file is checked against the SHA-256 listed in `manifest.json` before it's used. A file that doesn't match is ignored and the app keeps running the copy it has.
 - Downloads are kept in the app's data folder under `payload/`. Deleting that folder returns the app to the copy you installed.
 
-`bootstrap.js` (the launcher) is the one file that can't update itself. If a future update needs a new launcher, the top bar says "needs a reinstall".
+`bootstrap.js` (the launcher) is the one file that can't update itself. If a future update needs a new launcher, the top bar says "needs a reinstall"; clicking it opens the [app release](https://github.com/Dylz101/claude-reskin/releases/tag/app), where a new `Claude-Reskin.dmg` is built by `.github/workflows/mac-app.yml` whenever `bootstrap.js` or `package.json` changes on `main`. Drag it into Applications to replace the old copy.
 
 To publish an update: make the change, run `npm test`, run `npm run release` (bumps the version and rewrites `manifest.json`), then commit and push to `main`. `npm run dev` starts the app from this folder without the updater.
 

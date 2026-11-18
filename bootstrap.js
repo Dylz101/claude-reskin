@@ -58,6 +58,9 @@ class Updater extends EventEmitter {
     this.ready = null;                // newest downloaded build, if any
     this.busy = false;
     this.timer = null;
+    // A request that never answers (sleep, a dropped connection) would hold
+    // `busy` forever and silently block every later check.
+    this.fetchTimeoutMs = 30 * 1000;
   }
 
   get version() { return (this.ready || this.running).version; }
@@ -70,13 +73,26 @@ class Updater extends EventEmitter {
   status(state, extra) { this.emit('status', Object.assign({ state, version: this.version }, extra)); }
 
   async fetchBuffer(url) {
-    const res = await net.fetch(url, { cache: 'no-store' });
-    if (!res.ok) throw new Error('HTTP ' + res.status + ' for ' + url);
-    return Buffer.from(await res.arrayBuffer());
+    const ctrl = new AbortController();
+    let timer;
+    const timeout = new Promise((_, reject) => {
+      timer = setTimeout(() => {
+        ctrl.abort();
+        reject(new Error('GitHub did not answer within ' + Math.round(this.fetchTimeoutMs / 1000) + ' seconds; will retry'));
+      }, this.fetchTimeoutMs);
+    });
+    const get = (async () => {
+      const res = await net.fetch(url, { cache: 'no-store', signal: ctrl.signal });
+      if (!res.ok) throw new Error('HTTP ' + res.status + ' for ' + url);
+      return Buffer.from(await res.arrayBuffer());
+    })();
+    get.catch(() => {}); // settled by the race below; don't report it twice
+    try { return await Promise.race([get, timeout]); } finally { clearTimeout(timer); }
   }
 
   async check(manual) {
-    if (this.busy) return;
+    // A check is already running: say so, and let it report how it ends.
+    if (this.busy) { if (manual) this.status('checking'); return; }
     this.busy = true;
     try {
       if (manual) this.status('checking');

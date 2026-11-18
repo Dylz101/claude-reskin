@@ -471,6 +471,7 @@
   // the look apply in place; anything else restarts the app straight away,
   // reopening the same panes. Background checks never restart on their own:
   // they only download and show "restart to update".
+  var INSTALL_PAGE = 'https://github.com/Dylz101/claude-reskin/releases/tag/app';
   var updateAsked = null; // { from: state when clicked, seen: the check has started }
   var restarting = false;
 
@@ -498,7 +499,7 @@
     else if (u.state === 'current') title = v + ' is the latest version. Click to check again.';
     else if (u.state === 'updated') { text = 'updated to ' + v; title = 'Updated while running. Click to check again.'; }
     else if (u.state === 'restart') { text = 'restart to update'; title = 'v' + u.version + ' is downloaded. Click to restart into it; your panes reopen.'; }
-    else if (u.state === 'reinstall') { text = 'v' + (u.remoteVersion || '') + ' needs a reinstall'; title = 'This update changes the launcher. Download the app again from GitHub.'; }
+    else if (u.state === 'reinstall') { text = 'v' + (u.remoteVersion || '') + ' needs a reinstall'; title = 'This update changes the launcher. Click to download the new app, then install it over this one.'; }
     else if (u.state === 'error') { text = v + ' · check failed'; title = (u.message || 'Update check failed') + '. Click to try again.'; }
     b.textContent = text;
     b.title = title;
@@ -519,6 +520,8 @@
   $('btn-update').addEventListener('click', function () {
     var u = state.update || { state: 'off' };
     if (u.state === 'off' || restarting) return;
+    // The launcher can't update itself: open the page with the new installer.
+    if (u.state === 'reinstall') { window.open(INSTALL_PAGE); return; }
     // Check first even when a build is already downloaded, so the restart
     // lands on the newest one.
     var asked = updateAsked = { from: u.state, seen: false };
