@@ -1,13 +1,14 @@
 {
-  "version": "0.2.8",
-  "build": 20261118054938,
+  "version": "0.2.9",
+  "build": 20261118055842,
   "minLoader": 1,
-  "published": "2026-11-18T05:49:38.464Z",
+  "published": "2026-11-18T05:58:42.889Z",
   "files": {
-    "main.js": "e91f5db1287ba4b86f703b5cce2c21a5f9c27ab5c1c1988a72bf35ada064d925",
+    "main.js": "6317315632ba7adc3d675873f51d08939e29584db2698ab157848ac8a4a802c1",
     "preload.js": "048115af3eb2cb3cf55cdccfd21e0cd2bbd22b218d01f028b6b84b401e5169c8",
     "theme.js": "e79f4bc7246528cd4db7a7731849c2cf602a680dc3309ba037f9444365e4654f",
     "sidebar-data.js": "9cdaafadec25f3ebafed3097380199abf4bb6528c92423e58da067b80969df59",
+    "shell/icon.png": "2494e181b6aa6373dfd0acf9530670cc5a8c64241940eb7fde71a9f17578e7ef",
     "shell/index.html": "2eed695cfff2fda6c20aa9de581243e7551486f61a8a42564a8d15a1889b8f44",
     "shell/shell.css": "1dd20913c69b9b57722bcccbd62dea2f1d8479649085eb13a24935d126b850be",
     "shell/shell.js": "453a3b2600b571fba7c1275b4d09a7cf9592645b147d77291d70336806c0d75c",
