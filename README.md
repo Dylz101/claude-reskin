@@ -64,10 +64,11 @@ The builds are unsigned, so macOS and Windows will warn the first time you open 
 | Switch panes | Click inside one, or Ctrl/Cmd+1, 2, 3 |
 | New chat in the focused pane | `new chat`, or Ctrl/Cmd+N |
 | Change colours and fonts | `appearance`, or Ctrl/Cmd+, |
+| Save a colour combination | appearance › palette › `save current colours`. Saved ones sit under the presets: click one to apply it, or rename or delete it. Hover a combination to see its hex codes |
 | Hide the app sidebar | Ctrl/Cmd+B |
 | Zoom the focused pane | Ctrl/Cmd+= and Ctrl/Cmd+- |
 
-Open panes, colours, fonts and window size are saved and restored on the next launch.
+Open panes, colours, fonts, saved colour combinations and window size are saved and restored on the next launch. A saved combination holds the background, primary, secondary and accent colours and the light/dark mode; applying one leaves your fonts and text size as they are.
 
 ## Updates
 

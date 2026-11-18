@@ -35,7 +35,7 @@ const { chromium } = require('playwright');
   await page.waitForTimeout(200);
   report.afterClose = await layout();
 
-  await page.click('.palette:nth-child(4)');
+  await page.click('.palette-tile:nth-child(4) .palette');
   await page.waitForTimeout(200);
   report.darkGround = await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--ground'));
   await page.screenshot({ path: path.join(out, 'shell-dark.png') });

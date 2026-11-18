@@ -5,7 +5,8 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 const SEND = new Set([
   'shell:ready', 'pane:layout', 'pane:focus', 'pane:close', 'pane:only', 'pane:back', 'pane:reload',
-  'pane:split', 'chat:open', 'session:open', 'nav:go', 'ui:set', 'theme:set', 'theme:reset', 'update:check', 'update:restart'
+  'pane:split', 'chat:open', 'session:open', 'nav:go', 'ui:set', 'theme:set', 'theme:reset',
+  'palette:save', 'palette:rename', 'palette:remove', 'update:check', 'update:restart'
 ]);
 const INVOKE = new Set(['chats:list', 'code:list', 'fonts:list', 'fonts:add', 'fonts:remove']);
 const LISTEN = new Set(['state', 'chats-changed', 'code-changed']);
