@@ -1,0 +1,6 @@
+<!-- Source for shell/icon.png (macOS template: 824px body with 185px corners on a 1024px canvas). -->
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+<defs><clipPath id="c"><rect x="100" y="100" width="824" height="824" rx="185"/></clipPath>
+<filter id="s" x="-10%" y="-10%" width="120%" height="130%"><feDropShadow dx="0" dy="10" stdDeviation="14" flood-opacity=".3"/></filter></defs>
+<g filter="url(#s)"><rect x="100" y="100" width="824" height="824" rx="185" fill="#141414"/></g>
+<g clip-path="url(#c)"><rect x="232" y="232" width="160" height="560" fill="#ff4f00"/><rect x="432" y="232" width="160" height="560" fill="#ededea"/><rect x="632" y="232" width="160" height="560" fill="#ededea"/></g></svg>

@@ -171,6 +171,7 @@ function createWindow() {
     width: b.width || 1440, height: b.height || 900, x: b.x, y: b.y,
     minWidth: 720, minHeight: 520,
     title: 'Claude Reskin',
+    icon: path.join(APP_DIR, 'shell', 'icon.png'), // Windows and Linux; macOS uses the dock below
     backgroundColor: Theme.palette(settings.theme).ground,
     titleBarStyle: IS_MAC ? 'hiddenInset' : 'default',
     trafficLightPosition: IS_MAC ? { x: 14, y: 18 } : undefined
@@ -679,6 +680,9 @@ if (!app.requestSingleInstanceLock()) {
   });
 
   app.whenReady().then(() => {
+    // The installed app's own icon only changes with a reinstall; setting the
+    // dock icon here lets an update change it while the app runs.
+    if (IS_MAC && app.dock) { try { app.dock.setIcon(path.join(APP_DIR, 'shell', 'icon.png')); } catch { /* keep the bundle icon */ } }
     loadSettings();
     nativeTheme.themeSource = settings.theme.mode === 'dark' ? 'dark' : 'light';
     createSidebarData();
